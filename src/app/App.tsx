@@ -2660,59 +2660,59 @@ export default function App() {
   if (view === "admin") {
     if (!adminAuthenticated) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-orange-50 flex items-center justify-center px-4 py-12">
-          <div className="w-full max-w-md rounded-[2rem] border border-gray-200 bg-white p-8 shadow-2xl">
+        <div className="flex min-h-[100svh] items-center justify-center overflow-x-hidden bg-[#e9edf7] px-3 py-6 sm:px-4 sm:py-12">
+          <div className="w-full max-w-md rounded-[1.5rem] border border-white/70 bg-[#e9edf7] p-5 shadow-[12px_12px_26px_rgba(163,177,198,0.55),-12px_-12px_26px_rgba(255,255,255,0.9)] sm:rounded-[2rem] sm:p-8 sm:shadow-[18px_18px_38px_rgba(163,177,198,0.55),-18px_-18px_38px_rgba(255,255,255,0.9)]">
             <div className="text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full" style={{ background:`${G}15` }}>
-                <LogIn className="h-8 w-8" style={{ color:G }} />
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#e9edf7] shadow-[5px_5px_10px_rgba(163,177,198,0.45),-5px_-5px_10px_rgba(255,255,255,0.9)] sm:h-16 sm:w-16 sm:shadow-[6px_6px_12px_rgba(163,177,198,0.45),-6px_-6px_12px_rgba(255,255,255,0.9)]">
+                <LogIn className="h-7 w-7 text-green-700 sm:h-8 sm:w-8" />
               </div>
-              <p className="mt-4 text-sm font-semibold uppercase tracking-[0.3em]" style={{ color:OR }}>CRM Staff Only</p>
-              <h1 className="mt-2 font-display text-3xl font-bold text-gray-900">Staff Login</h1>
-              <p className="mt-2 text-sm text-gray-500">Use the secure credentials to access admin portal.</p>
+              <p className="mt-4 text-[0.68rem] font-bold uppercase tracking-[0.22em] text-green-700 sm:mt-5 sm:text-xs sm:tracking-[0.32em]">CRM Staff Only</p>
+              <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-black sm:mt-3 sm:text-3xl">Staff Login</h1>
+              <p className="mt-2 text-sm leading-6 text-black/70 sm:mt-3">Use the secure credentials to access admin portal.</p>
             </div>
 
-            <div className="mt-8 space-y-4">
-              <div className="flex overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-1">
+            <div className="mt-6 space-y-4 sm:mt-8">
+              <div className="flex overflow-hidden rounded-full border border-white/80 bg-[#e9edf7] p-1 shadow-[inset_3px_3px_7px_rgba(163,177,198,0.35),inset_-3px_-3px_7px_rgba(255,255,255,0.85)]">
                 <button
                   type="button"
                   onClick={() => setAdminMode("login")}
-                  className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-all ${adminMode === "login" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${adminMode === "login" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
                 >
                   Login
                 </button>
                 <button
                   type="button"
                   onClick={() => setAdminMode("signup")}
-                  className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-all ${adminMode === "signup" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${adminMode === "signup" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
                 >
                   Sign Up
                 </button>
                 <button
                   type="button"
                   onClick={() => setAdminMode("reset")}
-                  className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold transition-all ${adminMode === "reset" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${adminMode === "reset" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
                 >
                   Reset
                 </button>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Email Address</label>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Email Address</label>
                 <input
                   type="email"
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                  className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
                   placeholder="name@company.com"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Phone Number</label>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Phone Number</label>
                 <input
                   value={adminPhone}
                   onChange={(e) => setAdminPhone(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                  className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
                   placeholder="0241234567 or +233241234567"
                 />
               </div>
@@ -2720,34 +2720,34 @@ export default function App() {
               {adminMode === "reset" ? (
                 <>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">New Password</label>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">New Password</label>
                     <input
                       type="password"
                       value={adminResetPassword}
                       onChange={(e) => setAdminResetPassword(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
                       placeholder="Enter new password"
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">Confirm New Password</label>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Confirm New Password</label>
                     <input
                       type="password"
                       value={adminResetConfirmPassword}
                       onChange={(e) => setAdminResetConfirmPassword(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
                       placeholder="Re-enter new password"
                     />
                   </div>
                 </>
               ) : (
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Password</label>
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Password</label>
                   <input
                     type="password"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                    className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
                     placeholder="Enter password"
                   />
                 </div>
@@ -2755,12 +2755,12 @@ export default function App() {
 
               {adminMode === "signup" ? (
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Confirm Password</label>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Confirm Password</label>
                   <input
                     type="password"
                     value={adminConfirmPassword}
                     onChange={(e) => setAdminConfirmPassword(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                    className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
                     placeholder="Re-enter password"
                   />
                 </div>
@@ -2770,8 +2770,7 @@ export default function App() {
 
               <button
                 onClick={adminMode === "login" ? handleAdminLogin : adminMode === "signup" ? handleAdminSignup : handleAdminPasswordReset}
-                className="w-full rounded-full px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ background:G }}
+                className="w-full rounded-xl bg-[#e9edf7] px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] text-black shadow-[7px_7px_14px_rgba(163,177,198,0.5),-7px_-7px_14px_rgba(255,255,255,0.9)] transition-shadow hover:shadow-[4px_4px_8px_rgba(163,177,198,0.5),-4px_-4px_8px_rgba(255,255,255,0.9)]"
               >
                 {adminMode === "login" ? "Sign In" : adminMode === "signup" ? "Create Account" : "Reset Password"}
               </button>
@@ -2780,14 +2779,14 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleAdminReset}
-                  className="w-full text-center text-sm font-semibold text-green-700 underline-offset-4 hover:underline"
+                  className="w-full text-center text-xs font-bold tracking-wide text-black underline-offset-4 hover:underline"
                 >
                   Reset password using email
                 </button>
               ) : null}
             </div>
 
-            <div className="mt-6 text-center text-xs text-gray-400">
+            <div className="mt-6 text-center text-xs leading-5 text-black/60">
               Use your registered email and phone number to access the admin portal.
             </div>
           </div>
@@ -4095,7 +4094,7 @@ export default function App() {
 
       {/* ─ Nav ─────────────────────────────────────────────────────────── */}
       <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/95 shadow-[0_8px_24px_rgba(15,23,42,0.18)] backdrop-blur sm:static">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-2 sm:h-20 sm:px-6 lg:px-8">
           {/* Brand */}
           <button
             type="button"
@@ -4112,11 +4111,11 @@ export default function App() {
               const homeSection = document.getElementById("home");
               homeSection?.scrollIntoView({ behavior: "smooth", block: "start" });
             }}
-            className="flex items-center gap-3 rounded-full border border-emerald-100 bg-emerald-50/70 px-3 py-2 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            className="flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50/70 px-2 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:gap-3 sm:px-3 sm:py-2"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white p-1 shadow-sm ring-2 ring-emerald-100">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white p-1 shadow-sm ring-2 ring-emerald-100 sm:h-12 sm:w-12">
               <ImageWithFallback src={clinicLogo} alt="Edu Herbal Clinic logo"
-                className="h-10 w-10 rounded-full object-contain"
+                className="h-9 w-9 rounded-full object-contain sm:h-10 sm:w-10"
               />
             </div>
             <div className="hidden sm:block">
@@ -4142,8 +4141,8 @@ export default function App() {
             </a>
           </div>
 
-          <button className="lg:hidden p-1" onClick={() => setMenuOpen(!menuOpen)}>
-            {menuOpen ? <X className="w-6 h-6 text-gray-700" /> : <Menu className="w-6 h-6 text-gray-700" />}
+          <button className="lg:hidden p-1.5" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}>
+            {menuOpen ? <X className="h-5 w-5 text-gray-700 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 text-gray-700 sm:h-6 sm:w-6" />}
           </button>
         </div>
 
