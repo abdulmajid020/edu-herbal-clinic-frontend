@@ -30,8 +30,8 @@ import product4Image from "@/imports/product-4.jpg";
 import product5Image from "@/imports/product-5.jpg";
 import product6Image from "@/imports/product-6.jpg";
 import product7Image from "@/imports/product-7.jpg";
-import { G, OR, R, W } from "../theme";
-import { SERVICES, PRODUCTS, FAQS, BLOG_POSTS, TESTIMONIALS, DOCTORS, INITIAL_HERO_SLIDES, AWARD_GALLERY } from "../content";
+import { G, OR, R, W } from "@/app/theme";
+import { SERVICES, PRODUCTS, FAQS, BLOG_POSTS, TESTIMONIALS, DOCTORS, INITIAL_HERO_SLIDES, AWARD_GALLERY } from "@/app/content";
 
 interface PublicWebsiteProps {
   heroIndex: number;

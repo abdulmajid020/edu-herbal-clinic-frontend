@@ -1,21 +1,24 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  Calendar, Phone, MapPin, MessageCircle, ShoppingBag,
+import { Calendar, Phone, MapPin, MessageCircle, ShoppingBag,
   ChevronDown, ChevronLeft, Star, Clock, Users, TrendingUp, Package,
-  FileText, Leaf, Stethoscope, AlertTriangle, Search,
-  CheckCircle, ArrowRight, Menu, X, LogIn, PhoneCall, PhoneMissed,
-  PhoneForwarded, FlaskConical, Send, Plus, Mail,
-  BarChart2, Shield, ChevronRight, Bot,
-  UserCheck, Pill, Download, LogOut,
-  RefreshCw, Inbox, Home, Microscope, Footprints, BedDouble, Ambulance,
-  Moon, Sun, Trash2,
-} from "lucide-react";
+  FileText, Leaf, Stethoscope, AlertTriangle, Search, CheckCircle, 
+  ArrowRight, Menu, X, LogIn, PhoneCall, PhoneMissed, PhoneForwarded, 
+  FlaskConical, Send, Plus, Mail, Shield, ChevronRight, Bot,
+  UserCheck, Pill, Download, LogOut, RefreshCw, Inbox, Home, Microscope, 
+  Footprints, BedDouble, Ambulance, Moon, Sun, Trash2, } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/app/components/ui/carousel";
+import { AuthService, getAuthToken, StaffUser } from "../../services/authService";
+import { ProductService, Product } from "../../services/productService";
+import { InventoryService, InventoryItem } from "../../services/inventoryService";
+import { AppointmentService } from "../../services/appointmentService";
+import { PatientService, Patient } from "../../services/patientService";
+import { CallService, CallLog } from "../../services/callService";
+import { StaffService, StaffMember, StaffAnnouncement } from "../../services/staffService";
 import clinicLogo from "@/imports/photo_2024-05-10_11-09-44-1.jpg";
 import service5Image from "@/imports/service-5.jpg";
 import service1Image from "@/imports/service-1.jpg";
@@ -578,18 +581,8 @@ export default function App() {
     return [] as MonthlyReport[];
   };
 
-  const getStoredCallLogs = () => {
-    if (typeof window === "undefined") return CALLS;
-    try {
-      const stored = window.localStorage.getItem("eduCallLogs");
-      const parsed = stored ? JSON.parse(stored) : null;
-      if (Array.isArray(parsed) && parsed.length) {
-        return parsed as typeof CALLS;
-      }
-    } catch {
-      // fall back to default seed data
-    }
-    return CALLS;
+  const getStoredCallLogs = (): CallLog[] => {
+    return CALLS as unknown as CallLog[];
   };
 
   const getStoredPatientChat = () => {
@@ -665,7 +658,7 @@ export default function App() {
   const [selPatient,    setSelPatient   ] = useState<PatientEntry | null>(null);
   const [callNotes,     setCallNotes    ] = useState<Record<number,string>>({});
   const [editingCallNoteId, setEditingCallNoteId] = useState<number | null>(null);
-  const [callLogEntries, setCallLogEntries] = useState(getStoredCallLogs);
+  const [callLogEntries, setCallLogEntries] = useState<CallLog[]>(getStoredCallLogs);
   const [chatOpen,      setChatOpen     ] = useState(false);
   const [chatInput,     setChatInput    ] = useState("");
   const [chatMessages,  setChatMessages ] = useState([{ role:"bot", text:"Hello! I am EduBot, your 24/7 assistant at Edu Herbal Clinic. How can I help you today? 🌿" }]);
@@ -684,8 +677,40 @@ export default function App() {
   const [adminMobileMenuOpen, setAdminMobileMenuOpen] = useState(false);
   const [patientTab,    setPatientTab   ] = useState("orders");
   const [cart,          setCart         ] = useState<Record<number,number>>({});
+  const [staffMembers,  setStaffMembers ] = useState<StaffMember[]>(() => STAFF_LIST.map((s, idx) => ({ id: idx + 1, ...s, department: s.dept })));
+  const [staffAnnouncements, setStaffAnnouncements] = useState<StaffAnnouncement[]>([
+    {
+      id: 1,
+      title: "Monthly All-Staff Clinical Briefing",
+      message: "Reminder: All clinical and dispensary staff are requested to attend the monthly patient care review this Friday at 4:30 PM.",
+      author: "Dr. Edu Mohammed",
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [editingStaffMember, setEditingStaffMember] = useState<StaffMember | null>(null);
+  const [staffFormData, setStaffFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    role: "",
+    department: "Clinical",
+    schedule: "8AM–5PM",
+    status: "Present" as "Present" | "Leave" | "Remote",
+  });
+  const [announcementModalOpen, setAnnouncementModalOpen] = useState(false);
+  const [announcementFormData, setAnnouncementFormData] = useState({
+    title: "",
+    message: "",
+  });
   const [staffFilter,   setStaffFilter  ] = useState<"Present" | "Leave" | "Remote" | null>(null);
-  const filteredStaff = staffFilter ? STAFF_LIST.filter(member => member.status === staffFilter) : STAFF_LIST;
+  const [staffSearch,   setStaffSearch  ] = useState("");
+  const filteredStaff = staffMembers.filter(member => {
+    const matchesFilter = !staffFilter || member.status === staffFilter;
+    const query = staffSearch.toLowerCase().trim();
+    const matchesSearch = !query || `${member.name} ${member.role} ${member.department || member.dept || ""} ${member.phone || ""}`.toLowerCase().includes(query);
+    return matchesFilter && matchesSearch;
+  });
   const [searchCRM,     setSearchCRM    ] = useState("");
   const [searchCalls,   setSearchCalls  ] = useState("");
   const [crmNewPatientOpen, setCrmNewPatientOpen] = useState(false);
@@ -697,7 +722,8 @@ export default function App() {
     date: "",
     time: "",
   });
-  const [inventoryItems, setInventoryItems] = useState(getStoredInventory);
+  const [inventoryItems, setInventoryItems] = useState<any[]>(INVENTORY);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryFormOpen, setInventoryFormOpen] = useState(false);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<string | null>(null);
   const [inventoryFormData, setInventoryFormData] = useState({
@@ -739,6 +765,8 @@ export default function App() {
   const [selectedBlogPreviewIndex, setSelectedBlogPreviewIndex] = useState(0);
   const [slidesPerView, setSlidesPerView] = useState(4);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminAuthLoading, setAdminAuthLoading] = useState(false);
+  const [currentStaffUser, setCurrentStaffUser] = useState<StaffUser | null>(null);
   const [adminMode, setAdminMode] = useState<"login" | "signup" | "reset">("login");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
@@ -795,6 +823,100 @@ export default function App() {
     } else {
       setView("public");
     }
+
+    // Verify existing token on initial mount
+    const token = getAuthToken();
+    if (token) {
+      AuthService.getMe()
+        .then((res) => {
+          if (res.success && res.user) {
+            setCurrentStaffUser(res.user);
+            setAdminAuthenticated(true);
+          }
+        })
+        .catch(() => {
+          AuthService.logout();
+          setCurrentStaffUser(null);
+          setAdminAuthenticated(false);
+        });
+    }
+
+    // Live fetch of Products and Inventory from backend
+    InventoryService.getInventory()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setInventoryItems(res.data);
+        }
+      })
+      .catch(err => console.warn("[INVENTORY] Live fetch error, using default inventory:", err));
+
+    ProductService.getProducts()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          // Synchronize products data with backend
+        }
+      })
+      .catch(err => console.warn("[PRODUCTS] Live fetch error, using default products:", err));
+
+    // Live fetch of Call Centre Logs from backend
+    CallService.getCalls()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setCallLogEntries(res.data);
+        }
+      })
+      .catch(err => console.warn("[CALLS] Live fetch error, using default calls:", err));
+
+    // Live fetch of Patients CRM from backend
+    PatientService.getPatients()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setCrmPatients(res.data.map(p => ({
+            id: p.id,
+            name: p.name,
+            phone: p.phone,
+            condition: p.condition,
+            lastVisit: p.lastVisit || "Active",
+            nextAppt: p.nextAppt || "Pending",
+            doctor: p.assignedDoctorName || "Dr. Edu Mohammed",
+            status: p.status,
+            balance: p.balance || 0,
+            products: p.products || [p.condition],
+          })));
+        }
+      })
+      .catch(err => console.warn("[PATIENTS] Live fetch error, using default patients:", err));
+
+    // Live fetch of Appointments from backend
+    AppointmentService.getAppointments()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setPatientAppointments(res.data.map(a => ({
+            id: a.id,
+            patientName: a.patientName,
+            phone: a.phone,
+            service: a.service,
+            doctor: a.doctorName,
+            date: a.date,
+            time: a.time,
+            status: (a.status === "Cancelled" ? "Pending" : a.status) as PatientAppointment["status"],
+            createdAt: a.createdAt || new Date().toISOString(),
+          })));
+        }
+      })
+      .catch(err => console.warn("[APPOINTMENTS] Live fetch error, using default appointments:", err));
+
+    // Live fetch of Staff List and Announcements from backend
+    StaffService.getStaffList()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setStaffMembers(res.data);
+          if (Array.isArray(res.announcements) && res.announcements.length > 0) {
+            setStaffAnnouncements(res.announcements);
+          }
+        }
+      })
+      .catch(err => console.warn("[STAFF] Live fetch error, using default staff:", err));
   }, []);
 
   useEffect(() => {
@@ -874,10 +996,7 @@ export default function App() {
     window.localStorage.setItem("eduMonthlyReports", JSON.stringify(monthlyReports));
   }, [monthlyReports]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("eduCallLogs", JSON.stringify(callLogEntries));
-  }, [callLogEntries]);
+
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.crypto?.subtle) return;
@@ -950,10 +1069,7 @@ export default function App() {
     };
   }, [chatAuthenticated, chatPhone]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("eduInventory", JSON.stringify(inventoryItems));
-  }, [inventoryItems]);
+
 
   useEffect(() => {
     if (!selPatient && crmPatients.length > 0) {
@@ -1169,50 +1285,9 @@ export default function App() {
           ? Boolean(booking.date && booking.time)
           : true;
 
-  const normalizeAdminPhone = (value: string) => value.replace(/\s+/g, "").replace(/[()\-]/g, "");
-
-  const getStoredAdminAccounts = (): Array<{ email: string; phone: string; password: string }> => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = window.localStorage.getItem("eduAdminStaffAccounts");
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const getAdminAuthKey = (email: string, phone: string) => `${(email || "").trim().toLowerCase()}|${normalizeAdminPhone(phone || "")}`;
-
-  const getStoredAdminAuthStatus = (email: string, phone: string) => {
-    if (typeof window === "undefined") return { failedAttempts: 0, locked: false, resetRequested: false };
-
-    try {
-      const raw = window.localStorage.getItem("eduAdminAuthStatus");
-      const map = raw ? JSON.parse(raw) : {};
-      return map[getAdminAuthKey(email, phone)] || { failedAttempts: 0, locked: false, resetRequested: false };
-    } catch {
-      return { failedAttempts: 0, locked: false, resetRequested: false };
-    }
-  };
-
-  const setStoredAdminAuthStatus = (email: string, phone: string, status: { failedAttempts: number; locked: boolean; resetRequested: boolean }) => {
-    if (typeof window === "undefined") return;
-
-    try {
-      const raw = window.localStorage.getItem("eduAdminAuthStatus");
-      const map = raw ? JSON.parse(raw) : {};
-      map[getAdminAuthKey(email, phone)] = status;
-      window.localStorage.setItem("eduAdminAuthStatus", JSON.stringify(map));
-    } catch {
-      // ignore persistence failures in restricted browser contexts
-    }
-  };
-
-  const handleAdminLogin = () => {
+  const handleAdminLogin = async () => {
     const cleanedEmail = adminEmail.trim().toLowerCase();
-    const cleanedPhone = normalizeAdminPhone(adminPhone);
+    const cleanedPhone = adminPhone.trim();
     const trimmedPassword = adminPassword.trim();
 
     if (!cleanedEmail || !cleanedPhone || !trimmedPassword) {
@@ -1225,45 +1300,32 @@ export default function App() {
       return;
     }
 
-    if (!/^\+?[0-9]{10,15}$/.test(cleanedPhone)) {
-      setAdminLoginError("Enter a valid phone number with at least 10 digits.");
-      return;
-    }
-
-    const authStatus = getStoredAdminAuthStatus(cleanedEmail, cleanedPhone);
-    if (authStatus.locked) {
-      setAdminLoginError("Account locked. Reset your password using your email to unlock this account.");
-      return;
-    }
-
-    const accounts = getStoredAdminAccounts();
-    const accountMatch = accounts.some(account => account.email === cleanedEmail && normalizeAdminPhone(account.phone) === cleanedPhone && account.password === trimmedPassword);
-
-    if (accountMatch) {
-      setStoredAdminAuthStatus(cleanedEmail, cleanedPhone, { failedAttempts: 0, locked: false, resetRequested: false });
-      setAdminAuthenticated(true);
+    try {
+      setAdminAuthLoading(true);
       setAdminLoginError("");
-      setAdminMode("login");
-      return;
-    }
+      const res = await AuthService.login({
+        email: cleanedEmail,
+        phone: cleanedPhone,
+        password: trimmedPassword,
+      });
 
-    const nextFailedAttempts = (authStatus.failedAttempts || 0) + 1;
-    if (nextFailedAttempts >= 3) {
-      setStoredAdminAuthStatus(cleanedEmail, cleanedPhone, { failedAttempts: 3, locked: true, resetRequested: true });
-      setAdminLoginError("This was your final attempt. Account locked. Reset your password using your email to unlock it.");
-      return;
+      if (res.success && res.user) {
+        setCurrentStaffUser(res.user);
+        setAdminAuthenticated(true);
+        setAdminLoginError("");
+        setAdminMode("login");
+        setAdminPassword("");
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || "Invalid email, phone number, or password.");
+    } finally {
+      setAdminAuthLoading(false);
     }
-
-    setStoredAdminAuthStatus(cleanedEmail, cleanedPhone, { failedAttempts: nextFailedAttempts, locked: false, resetRequested: false });
-    const remaining = 3 - nextFailedAttempts;
-    setAdminLoginError(remaining === 1
-      ? "This is your last chance. One more incorrect attempt will lock the account."
-      : `Invalid email, phone number, or password. ${remaining} attempts remaining before lockout.`);
   };
 
-  const handleAdminSignup = () => {
+  const handleAdminSignup = async () => {
     const cleanedEmail = adminEmail.trim().toLowerCase();
-    const cleanedPhone = normalizeAdminPhone(adminPhone);
+    const cleanedPhone = adminPhone.trim();
     const trimmedPassword = adminPassword.trim();
 
     if (!cleanedEmail || !cleanedPhone || !trimmedPassword) {
@@ -1273,11 +1335,6 @@ export default function App() {
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
       setAdminLoginError("Enter a valid email address.");
-      return;
-    }
-
-    if (!/^\+?[0-9]{10,15}$/.test(cleanedPhone)) {
-      setAdminLoginError("Enter a valid phone number with at least 10 digits.");
       return;
     }
 
@@ -1291,69 +1348,70 @@ export default function App() {
       return;
     }
 
-    const accounts = getStoredAdminAccounts();
-    const alreadyExists = accounts.some(account => account.email === cleanedEmail && normalizeAdminPhone(account.phone) === cleanedPhone);
+    try {
+      setAdminAuthLoading(true);
+      setAdminLoginError("");
+      const fallbackName = cleanedEmail.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      const res = await AuthService.signup({
+        name: fallbackName,
+        email: cleanedEmail,
+        phone: cleanedPhone,
+        password: trimmedPassword,
+        confirmPassword: adminConfirmPassword.trim(),
+        role: "Staff",
+        department: "Clinical",
+      });
 
-    if (alreadyExists) {
-      setAdminLoginError("This email and phone number are already registered. Please log in instead.");
-      return;
+      if (res.success) {
+        setAdminLoginError("Registration successful! You can now sign in with your credentials.");
+        setAdminMode("login");
+        setAdminPassword("");
+        setAdminConfirmPassword("");
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || "Failed to register staff account.");
+    } finally {
+      setAdminAuthLoading(false);
     }
-
-    const nextAccounts = [...accounts, { email: cleanedEmail, phone: cleanedPhone, password: trimmedPassword }];
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("eduAdminStaffAccounts", JSON.stringify(nextAccounts));
-    }
-
-    setStoredAdminAuthStatus(cleanedEmail, cleanedPhone, { failedAttempts: 0, locked: false, resetRequested: false });
-    setAdminLoginError("");
-    setAdminMode("login");
-    setAdminPassword("");
-    setAdminConfirmPassword("");
-    setAdminEmail(cleanedEmail);
-    setAdminPhone(cleanedPhone);
   };
 
-  const handleAdminReset = () => {
+  const handleAdminReset = async () => {
     const cleanedEmail = adminEmail.trim().toLowerCase();
-    const cleanedPhone = normalizeAdminPhone(adminPhone);
+    const cleanedPhone = adminPhone.trim();
 
     if (!cleanedEmail || !cleanedPhone) {
       setAdminLoginError("Enter both your email and phone number to reset the password.");
       return;
     }
 
-    const accounts = getStoredAdminAccounts();
-    const accountExists = accounts.some(account => account.email === cleanedEmail && normalizeAdminPhone(account.phone) === cleanedPhone);
+    try {
+      setAdminAuthLoading(true);
+      setAdminLoginError("");
+      const res = await AuthService.resetRequest({
+        email: cleanedEmail,
+        phone: cleanedPhone,
+      });
 
-    if (!accountExists) {
-      setAdminLoginError("No matching staff account was found for that email and phone number.");
-      return;
+      if (res.success) {
+        setAdminMode("reset");
+        setAdminLoginError(res.message || `Password reset authorized for ${cleanedEmail}. Set a new password below.`);
+        setAdminPassword("");
+        setAdminConfirmPassword("");
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || "No matching staff account was found for that email and phone number.");
+    } finally {
+      setAdminAuthLoading(false);
     }
-
-    setStoredAdminAuthStatus(cleanedEmail, cleanedPhone, { failedAttempts: 0, locked: false, resetRequested: true });
-    setAdminMode("reset");
-    setAdminLoginError(`Password reset email sent to ${cleanedEmail}. Set a new password below to unlock the account.`);
-    setAdminPassword("");
-    setAdminConfirmPassword("");
   };
 
-  const handleAdminPasswordReset = () => {
+  const handleAdminPasswordReset = async () => {
     const cleanedEmail = adminEmail.trim().toLowerCase();
-    const cleanedPhone = normalizeAdminPhone(adminPhone);
+    const cleanedPhone = adminPhone.trim();
     const newPassword = adminResetPassword.trim();
 
     if (!cleanedEmail || !cleanedPhone || !newPassword) {
       setAdminLoginError("Enter your email, phone number, and a new password to continue.");
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
-      setAdminLoginError("Enter a valid email address.");
-      return;
-    }
-
-    if (!/^\+?[0-9]{10,15}$/.test(cleanedPhone)) {
-      setAdminLoginError("Enter a valid phone number with at least 10 digits.");
       return;
     }
 
@@ -1362,47 +1420,52 @@ export default function App() {
       return;
     }
 
-    const accounts = getStoredAdminAccounts();
-    const accountIndex = accounts.findIndex(account => account.email === cleanedEmail && normalizeAdminPhone(account.phone) === cleanedPhone);
-
-    if (accountIndex === -1) {
-      setAdminLoginError("No matching staff account was found for that email and phone number.");
-      return;
-    }
-
-    const originalPassword = accounts[accountIndex].password;
-    if (newPassword === originalPassword) {
-      setAdminLoginError("New password cannot be the same as your original signup password.");
-      return;
-    }
-
-    if (!newPassword.startsWith(originalPassword)) {
-      setAdminLoginError("New password must start with your original signup password and include at least 2 more characters.");
-      return;
-    }
-
-    if (newPassword.length < originalPassword.length + 2) {
-      setAdminLoginError("Add at least 2 characters to your original password to create a new password.");
-      return;
-    }
-
     if (adminResetPassword !== adminResetConfirmPassword) {
       setAdminLoginError("New passwords do not match.");
       return;
     }
 
-    accounts[accountIndex].password = newPassword;
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("eduAdminStaffAccounts", JSON.stringify(accounts));
-    }
+    try {
+      setAdminAuthLoading(true);
+      setAdminLoginError("");
+      const res = await AuthService.resetConfirm({
+        email: cleanedEmail,
+        phone: cleanedPhone,
+        newPassword,
+        confirmPassword: adminResetConfirmPassword.trim(),
+      });
 
-    setStoredAdminAuthStatus(cleanedEmail, cleanedPhone, { failedAttempts: 0, locked: false, resetRequested: false });
-    setAdminMode("login");
+      if (res.success) {
+        setAdminMode("login");
+        setAdminPassword("");
+        setAdminConfirmPassword("");
+        setAdminResetPassword("");
+        setAdminResetConfirmPassword("");
+        setAdminLoginError("Password reset successful! You can now sign in with your new password.");
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || "Failed to reset password.");
+    } finally {
+      setAdminAuthLoading(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    await AuthService.logout();
+    setCurrentStaffUser(null);
+    setAdminAuthenticated(false);
+    setAdminEmail("");
+    setAdminPhone("");
     setAdminPassword("");
     setAdminConfirmPassword("");
     setAdminResetPassword("");
     setAdminResetConfirmPassword("");
-    setAdminLoginError("Password reset successful. You can now sign in with your new password.");
+    setAdminLoginError("");
+    setHeroEditorOpen(false);
+    setBlogEditorOpen(false);
+    setAdminTab("overview");
+    setAdminMobileMenuOpen(false);
+    setView("admin");
   };
 
   const addPatientAppointment = (appointment: Omit<PatientAppointment, "id" | "createdAt">) => {
@@ -1593,13 +1656,14 @@ export default function App() {
     const fullName = (bookingData.fullName || "").trim() || "there";
     const hospitalNumber = "+233 055 837 9545";
     const message = `Hello ${fullName}, we have received and confirmed your appointment at Edu Herbal Clinic. Your appointment with ${doctorName} is scheduled for ${appointmentDate} at ${appointmentTime}. For questions call ${hospitalNumber}.`;
-    const encodedMessage = encodeURIComponent(message);
-    const target = (bookingData.phone || "").trim() ? `sms:${(bookingData.phone || "").trim()}?body=${encodedMessage}` : `sms:?body=${encodedMessage}`;
 
-    const smsWindow = window.open(target, "_blank", "noopener,noreferrer");
-    if (!smsWindow) {
-      window.location.href = target;
-    }
+    // ─── SMS protocol launcher disabled / commented out for now ──────────
+    // const encodedMessage = encodeURIComponent(message);
+    // const target = (bookingData.phone || "").trim() ? `sms:${(bookingData.phone || "").trim()}?body=${encodedMessage}` : `sms:?body=${encodedMessage}`;
+    // const smsWindow = window.open(target, "_blank", "noopener,noreferrer");
+    // if (!smsWindow) {
+    //   window.location.href = target;
+    // }
 
     return message;
   };
@@ -1662,13 +1726,13 @@ export default function App() {
     });
 
     try {
-      const response = await fetch("http://localhost:3001/api/call", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientName: patientName || "Patient", phone: cleanedPhone, mode: friendlyMode, attemptedAt }),
+      await CallService.logCall({
+        patientName: patientName || "Patient",
+        phone: cleanedPhone,
+        mode: friendlyMode,
+        attemptedAt,
       });
-      const data = await response.json().catch(() => null);
-      setBookingSmsStatus(data?.message || `${friendlyMode} channel opened for ${patientName || "the patient"}.`);
+      setBookingSmsStatus(`${friendlyMode} channel opened for ${patientName || "the patient"}.`);
     } catch {
       setBookingSmsStatus(`${friendlyMode} channel prepared for ${patientName || "the patient"}.`);
     }
@@ -1763,7 +1827,7 @@ export default function App() {
     window.history.replaceState({}, "", nextUrl);
   }, [callLogEntries]);
 
-  const createCallCentreEntry = (bookingData: { fullName?: string; phone?: string; service?: string; date?: string; time?: string; notes?: string }) => {
+  const createCallCentreEntry = async (bookingData: { fullName?: string; phone?: string; service?: string; date?: string; time?: string; notes?: string }) => {
     const patientName = (bookingData.fullName || "").trim() || "New Patient";
     const service = (bookingData.service || "Appointment").trim();
     const isTelemedicine = /telemedicine/i.test(service);
@@ -1777,6 +1841,21 @@ export default function App() {
       patientPhone ? `Patient phone: ${patientPhone}` : "",
       `Preferred slot: ${dateLabel} at ${timeLabel}`,
     ].filter(Boolean);
+    const note = noteParts.join(" ");
+
+    try {
+      await CallService.logCall({
+        patientName,
+        phone,
+        mode: isTelemedicine ? "WhatsApp" : "Phone",
+        attemptedAt: `${dateLabel} ${timeLabel}`,
+        note,
+        type: "incoming",
+        status: "unresolved",
+      } as any);
+    } catch (err) {
+      console.warn("[CREATE CALL API ERROR]", err);
+    }
 
     setCallLogEntries(prev => [{
       id: Date.now(),
@@ -1786,11 +1865,11 @@ export default function App() {
       type: "incoming",
       duration: "0:00",
       status: "unresolved",
-      note: noteParts.join(" "),
+      note,
     }, ...prev]);
   };
 
-  const handleAdminBookAppointment = (patient: PatientEntry) => {
+  const handleAdminBookAppointment = async (patient: PatientEntry) => {
     if (typeof window === "undefined") return;
 
     const defaultDoctor = DOCTORS.find(d => d.name === patient.doctor) ?? DOCTORS[0];
@@ -1809,6 +1888,19 @@ export default function App() {
       doctor: defaultDoctor.name,
       status: "Pending",
     } as PatientEntry;
+
+    try {
+      await AppointmentService.bookAppointment({
+        service: patient.condition || "Herbal Consultation",
+        doctorId: defaultDoctor.id,
+        fullName: patient.name,
+        phone: patient.phone,
+        date: appointmentDate,
+        time: appointmentTime,
+      });
+    } catch (apiErr) {
+      console.warn("[ADMIN BOOK APPT API ERROR]", apiErr);
+    }
 
     setCrmPatients(prev => prev.map(item => item.id === patient.id ? updatedPatient : item));
     setSelPatient(updatedPatient);
@@ -1832,13 +1924,27 @@ export default function App() {
     setBookingSmsStatus("Appointment booked for the patient and confirmation SMS prepared.");
   };
 
-  const handleCreateNewPatient = () => {
+  const handleCreateNewPatient = async () => {
     if (!crmNewPatientData.name.trim() || !crmNewPatientData.phone.trim() || !crmNewPatientData.condition.trim() || !crmNewPatientData.date || !crmNewPatientData.time) {
       setBookingSmsStatus("Please complete all patient and appointment fields.");
       return;
     }
 
     const selectedDoctor = DOCTORS.find(d => d.id === crmNewPatientData.doctorId) ?? DOCTORS[0];
+
+    try {
+      await AppointmentService.bookAppointment({
+        service: crmNewPatientData.condition.trim(),
+        doctorId: selectedDoctor.id,
+        fullName: crmNewPatientData.name.trim(),
+        phone: crmNewPatientData.phone.trim(),
+        date: crmNewPatientData.date,
+        time: crmNewPatientData.time,
+      });
+    } catch (apiErr) {
+      console.warn("[CRM PATIENT API] Recorded locally with fallback:", apiErr);
+    }
+
     const newPatient: PatientEntry = {
       id: Date.now(),
       name: crmNewPatientData.name.trim(),
@@ -1847,7 +1953,7 @@ export default function App() {
       lastVisit: "Just added",
       nextAppt: `${crmNewPatientData.date} · ${crmNewPatientData.time}`,
       doctor: selectedDoctor.name,
-      status: "Pending",
+      status: "Active",
       balance: 0,
       products: [crmNewPatientData.condition.trim()],
     };
@@ -1876,7 +1982,7 @@ export default function App() {
     setCrmNewPatientOpen(false);
   };
 
-  const advanceBooking = () => {
+  const advanceBooking = async () => {
     if (!canContinue) return;
     if (bookingStep < 4) {
       setBookingStep(s => s + 1);
@@ -1884,57 +1990,88 @@ export default function App() {
     }
 
     const confirmedBooking = { ...booking };
-    const selectedDoctorName = DOCTORS.find(d => d.id === booking.doctorId)?.name ?? "Dr. Osei";
-    const isTelemedicine = /telemedicine/i.test(confirmedBooking.service || "");
+    const selectedDoctor = DOCTORS.find(d => d.id === booking.doctorId) ?? DOCTORS[0];
+    const isTelemedicine = /telemedicine|video/i.test(confirmedBooking.service || "");
 
-    if (isTelemedicine) {
-      createCallCentreEntry({
-        fullName: confirmedBooking.fullName,
-        phone: confirmedBooking.phone,
+    // 1. Call Backend API
+    try {
+      await AppointmentService.bookAppointment({
         service: confirmedBooking.service,
+        doctorId: selectedDoctor.id,
+        fullName: confirmedBooking.fullName.trim(),
+        phone: confirmedBooking.phone.trim(),
+        email: confirmedBooking.email?.trim(),
+        notes: confirmedBooking.notes?.trim(),
         date: confirmedBooking.date,
         time: confirmedBooking.time,
-        notes: confirmedBooking.notes,
       });
-      setBookingSmsStatus("Telemedicine request received and routed to the Call Centre.");
-      setBookingDone(true);
-      setBookingStep(0);
-      setBooking({ ...EMPTY_BOOKING });
-      return;
+    } catch (apiErr) {
+      console.warn("[APPOINTMENT API] Direct booking recorded locally with fallback:", apiErr);
     }
 
-    const newPatient: PatientEntry = {
-      id: Date.now(),
-      name: booking.fullName.trim() || "New Patient",
-      phone: booking.phone.trim() || "+233 24 000 0000",
-      condition: booking.service || "New Booking",
-      lastVisit: "Just booked",
-      nextAppt: booking.date ? `${booking.date} · ${booking.time}` : "Pending",
-      doctor: selectedDoctorName,
-      status: "Pending",
-      balance: 0,
-      products: booking.service ? [booking.service] : [],
-    };
+    // 2. Intelligent Routing: Telemedicine vs CRM
+    if (isTelemedicine) {
+      CallService.getCalls()
+        .then(res => {
+          if (res.success && Array.isArray(res.data)) {
+            setCallLogEntries(res.data);
+          }
+        })
+        .catch(() => {
+          setCallLogEntries(prev => [{
+            id: Date.now(),
+            patient: confirmedBooking.fullName.trim() || "New Patient",
+            phone: confirmedBooking.phone.trim() || "+233 24 000 0000",
+            time: confirmedBooking.time || "Pending",
+            type: "incoming",
+            duration: "0:00",
+            status: "unresolved",
+            note: `Telemedicine request received for ${confirmedBooking.service}. Preferred slot: ${confirmedBooking.date} at ${confirmedBooking.time}. ${confirmedBooking.notes ? `Note: ${confirmedBooking.notes}` : ""}`.trim(),
+          }, ...prev]);
+        });
+      setBookingSmsStatus("Telemedicine session requested and routed to Call Centre. WhatsApp QR code prepared.");
+    } else {
+      // (Herbal Consultation, Laboratory Tests, Follow-up Visit, Prescription Refill, Skin & Dermatology)
+      const newPatient: PatientEntry = {
+        id: Date.now(),
+        name: confirmedBooking.fullName.trim() || "New Patient",
+        phone: confirmedBooking.phone.trim() || "+233 24 000 0000",
+        condition: confirmedBooking.service || "Herbal Consultation",
+        lastVisit: "Just booked",
+        nextAppt: confirmedBooking.date ? `${confirmedBooking.date} · ${confirmedBooking.time}` : "Pending",
+        doctor: selectedDoctor.name,
+        status: "Active",
+        balance: 0,
+        products: confirmedBooking.service ? [confirmedBooking.service] : [],
+      };
 
-    setCrmPatients(prev => {
-      const nextPatients = [newPatient, ...prev];
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("eduCrmPatients", JSON.stringify(nextPatients));
-      }
-      return nextPatients;
-    });
-    setSelPatient(newPatient);
-    addPatientAppointment({
-      patientName: confirmedBooking.fullName.trim() || "New Patient",
-      phone: confirmedBooking.phone.trim() || "+233 24 000 0000",
-      service: confirmedBooking.service || "New Booking",
-      doctor: selectedDoctorName,
-      date: confirmedBooking.date || "Pending",
-      time: confirmedBooking.time || "Pending",
-      status: "Confirmed",
-    });
+      setCrmPatients(prev => {
+        const existingIndex = prev.findIndex(p => p.phone === newPatient.phone || p.name.toLowerCase() === newPatient.name.toLowerCase());
+        if (existingIndex !== -1) {
+          return prev.map((p, idx) => idx === existingIndex ? {
+            ...p,
+            condition: newPatient.condition,
+            nextAppt: newPatient.nextAppt,
+            doctor: newPatient.doctor,
+            status: "Active",
+          } : p);
+        }
+        return [newPatient, ...prev];
+      });
+      setSelPatient(newPatient);
+      addPatientAppointment({
+        patientName: confirmedBooking.fullName.trim() || "New Patient",
+        phone: confirmedBooking.phone.trim() || "+233 24 000 0000",
+        service: confirmedBooking.service || "Herbal Consultation",
+        doctor: selectedDoctor.name,
+        date: confirmedBooking.date || "Pending",
+        time: confirmedBooking.time || "Pending",
+        status: "Confirmed",
+      });
+      setBookingSmsStatus("Clinical appointment confirmed and recorded in Patient CRM.");
+    }
+
     sendAppointmentSms(confirmedBooking);
-    setBookingSmsStatus("Appointment confirmation SMS prepared for the patient.");
     setBookingDone(true);
     setBookingStep(0);
     setBooking({ ...EMPTY_BOOKING });
@@ -2180,12 +2317,20 @@ export default function App() {
     p.name.toLowerCase().includes(searchCRM.toLowerCase()) ||
     p.condition.toLowerCase().includes(searchCRM.toLowerCase())
   );
-  const filteredCalls = callLogEntries.filter(c => {
+  const isTelemedicineCall = (c: { note?: string | null; patient?: string; service?: string }) => {
+    const text = `${c.note || ""} ${c.service || ""} ${c.patient || ""}`.toLowerCase();
+    return text.includes("telemedicine") || text.includes("video");
+  };
+
+  const telemedicineCalls = callLogEntries.filter(c => isTelemedicineCall(c));
+
+  const filteredCalls = telemedicineCalls.filter(c => {
     const searchValue = searchCalls.toLowerCase().trim();
     const matchesSearch = !searchValue || `${c.patient} ${c.phone} ${c.note || ""}`.toLowerCase().includes(searchValue);
     const isPlaceholder = ["unknown caller", "new enquiry"].includes((c.patient || "").toLowerCase());
     return matchesSearch && !isPlaceholder;
   });
+
   const patientChatConversations = Object.values(patientChat.reduce<Record<string, PatientChatMessage[]>>((groups, message) => {
     const key = message.phone || `name:${message.patientName || "Unknown patient"}`;
     groups[key] = groups[key] || [];
@@ -2200,10 +2345,11 @@ export default function App() {
     handoverActive: messages.some(message => message.handoverRequested && !message.handoverClosed),
     handoverPending: messages.some(message => message.handoverRequested && !message.handoverHandled),
   }));
+
   const callStats = {
-    incoming: callLogEntries.filter(c => c.type === "incoming").length,
-    missed: callLogEntries.filter(c => c.type === "missed").length,
-    returned: callLogEntries.filter(c => c.type === "returned").length,
+    incoming: telemedicineCalls.filter(c => c.type === "incoming").length,
+    missed: telemedicineCalls.filter(c => c.type === "missed").length,
+    returned: telemedicineCalls.filter(c => c.type === "returned").length,
   };
 
   const todayAppointments = patientAppointments
@@ -2267,7 +2413,7 @@ export default function App() {
     });
   };
 
-  const saveCallNote = (callId: number) => {
+  const saveCallNote = async (callId: number) => {
     const note = (callNotes[callId] || "").trim();
     if (!note) return;
     setCallLogEntries(prev => prev.map(call => call.id === callId ? { ...call, note } : call));
@@ -2277,6 +2423,12 @@ export default function App() {
       return next;
     });
     setEditingCallNoteId(null);
+
+    try {
+      await CallService.updateNote(callId, note);
+    } catch (err) {
+      console.warn("[UPDATE NOTE API ERROR]", err);
+    }
   };
 
   const startEditingCallNote = (callId: number) => {
@@ -2287,12 +2439,18 @@ export default function App() {
     }
   };
 
-  const toggleCallStatus = (callId: number) => {
+  const toggleCallStatus = async (callId: number) => {
     const currentCall = callLogEntries.find(call => call.id === callId);
     if (!currentCall || !currentCall.note) return;
     const nextStatus = currentCall.status === "resolved" ? "unresolved" : "resolved";
     setCallLogEntries(prev => prev.map(call => call.id === callId ? { ...call, status: nextStatus } : call));
     setEditingCallNoteId(null);
+
+    try {
+      await CallService.toggleStatus(callId);
+    } catch (err) {
+      console.warn("[TOGGLE STATUS API ERROR]", err);
+    }
   };
 
   const openInventoryRestock = (itemName: string) => {
@@ -2304,37 +2462,57 @@ export default function App() {
       item: itemName,
       category: existingItem?.category || matchingProduct?.category || inventoryFormData.category || "General",
       stock: "0",
-      min: String(existingItem?.min ?? matchingProduct?.min ?? 5),
+      min: String(existingItem?.min ?? (matchingProduct as any)?.min ?? 5),
       unit: existingItem?.unit || "units",
     });
   };
 
-  const handleInventorySubmit = (event: React.FormEvent) => {
+  const handleInventorySubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const itemName = inventoryFormData.item.trim();
     const category = inventoryFormData.category.trim();
     const stock = Number(inventoryFormData.stock);
-    const min = Number(inventoryFormData.min);
+    const min = Number(inventoryFormData.min) || 5;
     const unit = inventoryFormData.unit.trim() || "units";
     if (!itemName) return;
 
-    setInventoryItems(prev => {
-      const existing = prev.find(entry => entry.item.toLowerCase() === itemName.toLowerCase());
-      if (existing) {
-        return prev.map(entry => entry.item.toLowerCase() === itemName.toLowerCase() ? {
-          ...entry,
-          category: category || entry.category,
-          stock: entry.stock + (Number.isFinite(stock) ? stock : 0),
-          min: Number.isFinite(min) ? min : entry.min,
-          unit: unit || entry.unit,
-        } : entry);
+    try {
+      setInventoryLoading(true);
+      const res = await InventoryService.restock({
+        item: itemName,
+        category: category || "General",
+        stock: Number.isFinite(stock) ? stock : 0,
+        min,
+        unit,
+      });
+
+      if (res.success) {
+        const invRes = await InventoryService.getInventory();
+        if (invRes.success && Array.isArray(invRes.data)) {
+          setInventoryItems(invRes.data);
+        }
       }
+    } catch (err) {
+      console.error("Restock failed on backend, updating locally:", err);
+      setInventoryItems(prev => {
+        const existing = prev.find(entry => entry.item.toLowerCase() === itemName.toLowerCase());
+        if (existing) {
+          return prev.map(entry => entry.item.toLowerCase() === itemName.toLowerCase() ? {
+            ...entry,
+            category: category || entry.category,
+            stock: entry.stock + (Number.isFinite(stock) ? stock : 0),
+            min: Number.isFinite(min) ? min : entry.min,
+            unit: unit || entry.unit,
+          } : entry);
+        }
 
-      return [{ item: itemName, category: category || "General", stock: Number.isFinite(stock) ? stock : 0, min: Number.isFinite(min) ? min : 0, unit }, ...prev];
-    });
-
-    setInventoryFormOpen(false);
-    setInventoryFormData({ item: itemName, category, stock: "0", min: String(min || 5), unit });
+        return [{ id: Date.now(), productId: Date.now(), item: itemName, category: category || "General", stock: Number.isFinite(stock) ? stock : 0, min: Number.isFinite(min) ? min : 0, unit, safetyThreshold: 35, isLowStock: (stock || 0) < 35 }, ...prev];
+      });
+    } finally {
+      setInventoryLoading(false);
+      setInventoryFormOpen(false);
+      setInventoryFormData({ item: itemName, category, stock: "0", min: String(min || 5), unit });
+    }
   };
 
   const updateHeroDraftSlide = (index: number, field: "badge" | "eyebrow" | "title" | "description" | "panelTitle" | "panelSubtitle" | "overlayText" | "subText" | "smallText", value: string) => {
@@ -2426,6 +2604,8 @@ export default function App() {
     }
 
     if (view === "admin") {
+      AuthService.logout();
+      setCurrentStaffUser(null);
       setAdminAuthenticated(false);
       setAdminEmail("");
       setAdminPhone("");
@@ -2454,7 +2634,7 @@ export default function App() {
 
   // ── Portal header ────────────────────────────────────────────────────────
 
-  const PortalHeader = ({ title, sub, onBack }: { title: string; sub: string; onBack?: () => void }) => {
+  const PortalHeader = ({ title, sub, onBack, showExit, darkMode, onToggleDarkMode }: { title: string; sub: string; onBack?: () => void; showExit?: boolean; darkMode?: boolean; onToggleDarkMode?: () => void }) => {
     const isAdminHeader = title === "Staff Dashboard";
     const adminNavItems: { id: AdminTab; label: string; icon: React.ElementType }[] = [
       { id:"overview", label:"Overview", icon:Home },
@@ -2489,7 +2669,7 @@ export default function App() {
           </button>
           {adminMobileMenuOpen && (
             <div className="absolute right-0 top-12 w-52 rounded-2xl border border-gray-100 bg-white p-2 text-gray-700 shadow-xl">
-              <button type="button" onClick={() => { setAdminAuthenticated(false); setAdminMobileMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-700 hover:bg-red-50">
+              <button type="button" onClick={handleAdminLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-700 hover:bg-red-50">
                 <LogOut className="h-4 w-4" /> Logout
               </button>
               {adminNavItems.map((item) => (
@@ -2766,13 +2946,26 @@ export default function App() {
                 </div>
               ) : null}
 
-              {adminLoginError ? <p className="text-sm font-medium text-red-600">{adminLoginError}</p> : null}
+              {adminLoginError ? (
+                <p
+                  className={`text-sm font-medium ${
+                    adminLoginError.toLowerCase().includes("successful") ||
+                    adminLoginError.toLowerCase().includes("authorized") ||
+                    adminLoginError.toLowerCase().includes("sent")
+                      ? "text-emerald-600 font-semibold"
+                      : "text-red-600"
+                  }`}
+                >
+                  {adminLoginError}
+                </p>
+              ) : null}
 
               <button
+                disabled={adminAuthLoading}
                 onClick={adminMode === "login" ? handleAdminLogin : adminMode === "signup" ? handleAdminSignup : handleAdminPasswordReset}
-                className="w-full rounded-xl bg-[#e9edf7] px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] text-black shadow-[7px_7px_14px_rgba(163,177,198,0.5),-7px_-7px_14px_rgba(255,255,255,0.9)] transition-shadow hover:shadow-[4px_4px_8px_rgba(163,177,198,0.5),-4px_-4px_8px_rgba(255,255,255,0.9)]"
+                className="w-full rounded-xl bg-[#e9edf7] px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] text-black shadow-[7px_7px_14px_rgba(163,177,198,0.5),-7px_-7px_14px_rgba(255,255,255,0.9)] transition-shadow hover:shadow-[4px_4px_8px_rgba(163,177,198,0.5),-4px_-4px_8px_rgba(255,255,255,0.9)] disabled:opacity-50"
               >
-                {adminMode === "login" ? "Sign In" : adminMode === "signup" ? "Create Account" : "Reset Password"}
+                {adminAuthLoading ? "Please wait..." : adminMode === "login" ? "Sign In" : adminMode === "signup" ? "Create Account" : "Reset Password"}
               </button>
 
               {adminMode === "login" ? (
@@ -3006,32 +3199,12 @@ export default function App() {
     }
 
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="h-screen max-h-screen overflow-hidden bg-gray-50 flex flex-col">
         <PortalHeader title="Staff Dashboard" sub="Edu Herbal Clinic — Admin Panel" showExit={false} onBack={handlePortalBack} darkMode={isDarkMode} onToggleDarkMode={toggleDarkMode} />
-        <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
+        <div className="flex flex-1 min-h-0 overflow-hidden md:flex-row">
 
-          {/* Sidebar */}
-          <aside className="hidden w-full flex-shrink-0 flex-col gap-1 overflow-y-auto border-b border-gray-100 bg-white px-3 py-3 shadow-sm md:flex md:w-52 md:border-b-0 md:border-r md:py-5">
-            <button
-              onClick={() => {
-                setAdminAuthenticated(false);
-                setAdminEmail("");
-                setAdminPhone("");
-                setAdminPassword("");
-                setAdminConfirmPassword("");
-                setAdminResetPassword("");
-                setAdminResetConfirmPassword("");
-                setAdminLoginError("");
-                setHeroEditorOpen(false);
-                setBlogEditorOpen(false);
-                setAdminTab("overview");
-                setView("admin");
-              }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-all"
-              style={{ color:R }}
-            >
-              <LogOut className="w-4 h-4 flex-shrink-0" /> Logout
-            </button>
+          {/* Sidebar (Fixed & Non-scrolling) */}
+          <aside className="hidden w-full flex-shrink-0 flex-col gap-1 border-b border-gray-100 bg-white px-3 py-4 shadow-sm md:flex md:w-56 md:h-full md:border-b-0 md:border-r">
             {atabs.map(t => (
               <button key={t.id} onClick={() => setAdminTab(t.id)}
                 className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-all"
@@ -3049,6 +3222,13 @@ export default function App() {
               <p className="font-bold flex items-center gap-1 mb-0.5"><AlertTriangle className="w-3 h-3" /> Low Stock</p>
               <p>{lowStock.length > 0 ? `${lowStock.length} item${lowStock.length>1?"s":""} need restock` : "No low stock alerts"}</p>
             </div>
+            <button
+              onClick={handleAdminLogout}
+              className="mt-2 flex w-full items-center gap-3 rounded-xl border border-red-100 bg-red-50/50 px-3 py-2.5 text-left text-sm font-semibold transition-all hover:bg-red-100/70"
+              style={{ color:R }}
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" /> Logout
+            </button>
           </aside>
 
           <main className="min-w-0 flex-1 overflow-y-auto space-y-6 p-4 sm:p-5 md:p-6">
@@ -3498,77 +3678,72 @@ export default function App() {
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input value={searchCalls} onChange={e => setSearchCalls(e.target.value)} placeholder="Search patient or number…"
+                <input value={searchCalls} onChange={e => setSearchCalls(e.target.value)} placeholder="Search Telemedicine patient, phone or note…"
                   className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none shadow-sm" />
               </div>
               <div className="space-y-3">
-                {filteredCalls.map(call => {
-                  const CallIcon = call.type==="incoming" ? PhoneCall : call.type==="missed" ? PhoneMissed : PhoneForwarded;
-                  const clr = call.type==="incoming" ? G : call.type==="missed" ? R : OR;
-                  return (
-                    <div key={call.id} className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
-                      <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:gap-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background:clr+"18" }}>
-                          <CallIcon className="w-5 h-5" style={{ color:clr }} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                            <p className="min-w-0 break-words"><span className="font-semibold text-gray-900">{call.patient}</span><span className="ml-2 break-all text-sm text-gray-400">{call.phone}</span></p>
-                            <span className="shrink-0 text-xs text-gray-400">{call.time} · {call.duration}</span>
+                {filteredCalls.length > 0 ? (
+                  filteredCalls.map(call => {
+                    const CallIcon = call.type==="incoming" ? PhoneCall : call.type==="missed" ? PhoneMissed : PhoneForwarded;
+                    const clr = call.type==="incoming" ? G : call.type==="missed" ? R : OR;
+                    return (
+                      <div key={call.id} className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+                        <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:gap-4">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background:clr+"18" }}>
+                            <CallIcon className="w-5 h-5" style={{ color:clr }} />
                           </div>
-                          {editingCallNoteId === call.id ? (
-                            <div className="mt-2 space-y-1.5">
-                              <textarea placeholder="Add or edit call note…" rows={3} value={callNotes[call.id] || ""}
-                                onChange={e => setCallNotes(n => ({ ...n, [call.id]:e.target.value }))}
-                                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none" />
-                              <button onClick={() => saveCallNote(call.id)} className="text-xs text-white px-3 py-1 rounded-full hover:opacity-90 transition-opacity" style={{ background:G }}>
-                                {call.note ? "Update Note" : "Save Note"}
-                              </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                              <p className="min-w-0 break-words"><span className="font-semibold text-gray-900">{call.patient}</span><span className="ml-2 break-all text-sm text-gray-400">{call.phone}</span></p>
+                              <span className="shrink-0 text-xs text-gray-400">{call.time} · {call.duration}</span>
                             </div>
-                          ) : call.note ? (
-                            <div className="mt-2 rounded-lg px-3 py-2 text-sm text-gray-700 border-l-4" style={{ background:"#f0faf3", borderColor:G }}>
-                              <div className="flex items-start justify-between gap-2">
-                                <p className="min-w-0 flex-1 break-words">{call.note}</p>
-                                <button onClick={() => startEditingCallNote(call.id)} className="text-xs font-semibold text-gray-600">Edit</button>
+                            {editingCallNoteId === call.id ? (
+                              <div className="mt-2 space-y-1.5">
+                                <textarea placeholder="Add or edit telemedicine note…" rows={3} value={callNotes[call.id] || ""}
+                                  onChange={e => setCallNotes(n => ({ ...n, [call.id]:e.target.value }))}
+                                  className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none" />
+                                <button onClick={() => saveCallNote(call.id)} className="text-xs text-white px-3 py-1 rounded-full hover:opacity-90 transition-opacity" style={{ background:G }}>
+                                  {call.note ? "Update Note" : "Save Note"}
+                                </button>
                               </div>
-                            </div>
-                          ) : (
-                            <div className="mt-2 space-y-1.5">
-                              <textarea placeholder="Add or edit call note…" rows={3} value={callNotes[call.id] || ""}
-                                onChange={e => setCallNotes(n => ({ ...n, [call.id]:e.target.value }))}
-                                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none" />
-                              <button onClick={() => saveCallNote(call.id)} className="text-xs text-white px-3 py-1 rounded-full hover:opacity-90 transition-opacity" style={{ background:G }}>
-                                Save Note
+                            ) : call.note ? (
+                              <div className="mt-2 rounded-lg px-3 py-2 text-sm text-gray-700 border-l-4" style={{ background:"#f0faf3", borderColor:G }}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="min-w-0 flex-1 break-words">{call.note}</p>
+                                  <button onClick={() => startEditingCallNote(call.id)} className="text-xs font-semibold text-gray-600">Edit</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 space-y-1.5">
+                                <textarea placeholder="Add or edit telemedicine note…" rows={3} value={callNotes[call.id] || ""}
+                                  onChange={e => setCallNotes(n => ({ ...n, [call.id]:e.target.value }))}
+                                  className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none" />
+                                <button onClick={() => saveCallNote(call.id)} className="text-xs text-white px-3 py-1 rounded-full hover:opacity-90 transition-opacity" style={{ background:G }}>
+                                  Save Note
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+                            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+                              <button
+                                onClick={() => initiatePatientCall(call.phone, call.patient)}
+                                className="rounded-full text-white px-2.5 py-1 text-[11px] font-semibold transition-opacity hover:opacity-90"
+                                style={{ background:G }}
+                              >
+                                Call
                               </button>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-                          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-                            <button
-                              onClick={() => initiatePatientCall(call.phone, call.patient)}
-                              className="rounded-full text-white px-2.5 py-1 text-[11px] font-semibold transition-opacity hover:opacity-90"
-                              style={{ background:G }}
-                            >
-                              Call
-                            </button>
-                            {call.note ? (
                               <button
                                 onClick={() => toggleCallStatus(call.id)}
-                                className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-opacity hover:opacity-90"
+                                title={call.status === "resolved" ? "Click to mark Unresolved" : "Click to mark Resolved"}
+                                className="rounded-full border px-3 py-1 text-xs font-semibold transition-all hover:shadow-sm"
                                 style={call.status === "resolved"
-                                  ? { borderColor:"#86efac", background:"#f0fdf4", color:"#15803d" }
-                                  : { borderColor:"#fda4af", background:"#fff1f2", color:R }}
+                                  ? { borderColor:"#86efac", background:"#dcfce7", color:"#15803d" }
+                                  : { borderColor:"#fda4af", background:"#fee2e2", color:"#dc2626" }}
                               >
                                 {call.status === "resolved" ? "Resolved" : "Unresolved"}
                               </button>
-                            ) : null}
-                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0"
-                              style={ call.status==="resolved" ? { background:"#dcfce7",color:"#15803d" } : { background:"#fee2e2",color:"#dc2626" }}>
-                              {call.status}
-                            </span>
-                          </div>
-                          {call.note && /telemedicine/i.test(call.note) ? (
+                            </div>
                             <div className="flex flex-wrap items-center gap-2 self-start">
                               <button
                                 onClick={() => openPatientWhatsApp(call.phone, call.patient)}
@@ -3580,16 +3755,22 @@ export default function App() {
                               <button
                                 onClick={() => markQrScanned(call.id, call.patient, call.phone)}
                                 className="flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50 p-2 hover:opacity-90 transition-opacity"
+                                title="Scan WhatsApp QR code"
                               >
                                 <img src={getWhatsAppQrUrl(call.phone)} alt="WhatsApp QR" className="w-20 h-20 rounded-lg border border-gray-200 bg-white p-1" />
                               </button>
                             </div>
-                          ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center">
+                    <p className="text-sm font-semibold text-gray-700">No Telemedicine (Video) requests found</p>
+                    <p className="text-xs text-gray-400 mt-1">When patients select "Telemedicine (Video)" on the online booking form, appointments populate here with instant WhatsApp video & QR code triage.</p>
+                  </div>
+                )}
               </div>
             </>)}
 
@@ -3870,65 +4051,69 @@ export default function App() {
                 </button>
               </div>
               {inventoryFormOpen && (
-                <form onSubmit={handleInventorySubmit} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2">
+                <form onSubmit={handleInventorySubmit} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <h3 className="font-bold text-base text-gray-900">Restock / Add Product Stock</h3>
+                    <button type="button" onClick={() => setInventoryFormOpen(false)} className="text-xs font-semibold text-gray-500 hover:text-gray-700">Close ✕</button>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Product</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Product</label>
                       <select
                         value={inventoryFormData.item}
                         onChange={(e) => {
                           const selected = PRODUCTS.find(product => product.name === e.target.value);
                           setInventoryFormData(prev => ({ ...prev, item: e.target.value, category: selected?.category || prev.category }));
                         }}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                        className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
                       >
-                        {PRODUCTS.map(product => <option key={product.id} value={product.name}>{product.name}</option>)}
+                        {PRODUCTS.map(product => <option key={product.id} value={product.name} className="text-gray-900">{product.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Category</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Category</label>
                       <input
                         value={inventoryFormData.category}
                         onChange={(e) => setInventoryFormData(prev => ({ ...prev, category: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                        className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
                         placeholder="e.g. Capsules"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Stock Added</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Stock Quantity to Add</label>
                       <input
                         type="number"
                         min="0"
                         value={inventoryFormData.stock}
                         onChange={(e) => setInventoryFormData(prev => ({ ...prev, stock: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                        className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Min Level</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Min Safety Level</label>
                       <input
                         type="number"
                         min="0"
                         value={inventoryFormData.min}
                         onChange={(e) => setInventoryFormData(prev => ({ ...prev, min: e.target.value }))}
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                        className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
                       />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Unit</label>
+                  <div className="flex items-center gap-3">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Unit</label>
                     <input
                       value={inventoryFormData.unit}
                       onChange={(e) => setInventoryFormData(prev => ({ ...prev, unit: e.target.value }))}
-                      className="w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none"
+                      className="w-36 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
                       placeholder="units"
                     />
                   </div>
-                  <div className="flex gap-2">
-                    <button type="submit" className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background:G }}>
-                      Save Stock
+                  <div className="flex gap-3 pt-2">
+                    <button type="submit" disabled={inventoryLoading} className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background:G }}>
+                      {inventoryLoading ? "Saving..." : "Save Stock"}
                     </button>
-                    <button type="button" onClick={() => setInventoryFormOpen(false)} className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700">
+                    <button type="button" onClick={() => setInventoryFormOpen(false)} className="rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                       Cancel
                     </button>
                   </div>
@@ -3992,58 +4177,466 @@ export default function App() {
 
             {/* ── STAFF ── */}
             {adminTab === "staff" && (<>
-              <div className="flex items-center justify-between">
-                <h1 className="font-display text-3xl font-bold text-gray-900">Staff Portal</h1>
-                <button className="text-white px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition-opacity" style={{ background:OR }}>
-                  Post Announcement
-                </button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h1 className="font-display text-3xl font-bold text-gray-900">Staff Portal</h1>
+                  <p className="text-sm text-gray-500 mt-0.5">Manage clinic team members, shifts, schedules and internal announcements.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setAnnouncementModalOpen(true)}
+                    className="flex items-center gap-2 text-white px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                    style={{ background:OR }}
+                  >
+                    <Megaphone className="w-4 h-4" /> Post Announcement
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingStaffMember(null);
+                      setStaffFormData({
+                        name: "",
+                        email: "",
+                        phone: "",
+                        role: "",
+                        department: "Clinical",
+                        schedule: "8AM–5PM",
+                        status: "Present",
+                      });
+                      setStaffModalOpen(true);
+                    }}
+                    className="flex items-center gap-2 text-white px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
+                    style={{ background:G }}
+                  >
+                    <Plus className="w-4 h-4" /> Add Staff
+                  </button>
+                </div>
               </div>
+
+              {/* Announcements Section */}
+              {staffAnnouncements.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                      <Megaphone className="w-3.5 h-3.5" /> Staff Announcements ({staffAnnouncements.length})
+                    </p>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {staffAnnouncements.slice(0, 4).map((announcement) => (
+                      <div key={announcement.id} className="rounded-xl border border-amber-200/80 bg-white p-3.5 shadow-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-sm text-gray-900">{announcement.title}</h4>
+                          <span className="text-[10px] text-gray-400 shrink-0">{new Date(announcement.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-600 leading-relaxed">{announcement.message}</p>
+                        {announcement.author && (
+                          <p className="mt-2 text-[10px] font-semibold text-amber-700">By: {announcement.author}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Status Metric Cards */}
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { label:"Present", value: STAFF_LIST.filter(m => m.status === "Present").length, status: "Present", color:G },
-                  { label:"On Leave", value: STAFF_LIST.filter(m => m.status === "Leave").length, status: "Leave", color:OR },
-                  { label:"Remote", value: STAFF_LIST.filter(m => m.status === "Remote").length, status: "Remote", color:R },
+                  { label:"Present", value: staffMembers.filter(m => m.status === "Present").length, status: "Present", color:G },
+                  { label:"On Leave", value: staffMembers.filter(m => m.status === "Leave").length, status: "Leave", color:OR },
+                  { label:"Remote", value: staffMembers.filter(m => m.status === "Remote").length, status: "Remote", color:R },
                 ].map(s => (
                   <button
                     key={s.label}
                     type="button"
-                    onClick={() => setStaffFilter(prev => prev === s.status ? null : s.status)}
-                    className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm text-center transition hover:shadow-md"
-                    style={{ borderColor: staffFilter === s.status ? s.color : "#e5e7eb" }}
+                    onClick={() => setStaffFilter(prev => prev === s.status ? null : (s.status as "Present" | "Leave" | "Remote"))}
+                    className="rounded-2xl border bg-white p-5 shadow-sm text-center transition hover:shadow-md cursor-pointer"
+                    style={{ borderColor: staffFilter === s.status ? s.color : "#e5e7eb", borderWidth: staffFilter === s.status ? 2 : 1 }}
                   >
                     <p className="text-3xl font-bold" style={{ color:s.color }}>{s.value}</p>
-                    <p className="text-xs text-gray-400 mt-1">{s.label}</p>
+                    <p className="text-xs text-gray-500 font-medium mt-1">{s.label}</p>
+                    {staffFilter === s.status && (
+                      <span className="mt-1 inline-block text-[10px] font-bold text-gray-400 uppercase">Filtered</span>
+                    )}
                   </button>
                 ))}
               </div>
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="text-xs uppercase tracking-wide text-gray-400" style={{ background:"#f9fafb" }}>
-                    <tr>{["Name","Role","Department","Schedule","Status"].map(h=><th key={h} className="px-5 py-3 text-left">{h}</th>)}</tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {filteredStaff.map(s => {
-                      const ss = statusStyle(s.status);
-                      return (
-                        <tr key={s.name} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background:G }}>
-                                {s.name.split(" ").slice(-1)[0][0]}
-                              </div>
-                              <span className="font-semibold text-gray-900">{s.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3 text-gray-400">{s.role}</td>
-                          <td className="px-5 py-3 text-gray-400">{s.dept}</td>
-                          <td className="px-5 py-3 font-semibold text-gray-900">{s.schedule}</td>
-                          <td className="px-5 py-3"><span className="px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background:ss.bg,color:ss.text }}>{s.status}</span></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={staffSearch}
+                  onChange={e => setStaffSearch(e.target.value)}
+                  placeholder="Search staff by name, role, department or phone…"
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none shadow-sm"
+                />
               </div>
+
+              {/* Staff Table */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[650px] text-sm">
+                    <thead className="text-xs uppercase tracking-wide text-gray-400" style={{ background:"#f9fafb" }}>
+                      <tr>
+                        {["Staff Member", "Role", "Department", "Schedule", "Status", "Actions"].map(h => (
+                          <th key={h} className="px-5 py-3 text-left">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {filteredStaff.length > 0 ? (
+                        filteredStaff.map(s => {
+                          const ss = statusStyle(s.status);
+                          return (
+                            <tr key={s.id || s.name} className="hover:bg-gray-50/80 transition-colors">
+                              <td className="px-5 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-sm" style={{ background:G }}>
+                                    {s.name.split(" ").slice(-1)[0][0]}
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-gray-900">{s.name}</p>
+                                    <p className="text-xs text-gray-400">{s.phone || s.email || "No contact info"}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3 font-medium text-gray-700">{s.role}</td>
+                              <td className="px-5 py-3 text-gray-500">{s.department || s.dept || "Clinical"}</td>
+                              <td className="px-5 py-3 font-semibold text-gray-900">{s.schedule || "8AM–5PM"}</td>
+                              <td className="px-5 py-3">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const order: ("Present" | "Leave" | "Remote")[] = ["Present", "Leave", "Remote"];
+                                    const nextStatus = order[(order.indexOf(s.status) + 1) % order.length];
+                                    setStaffMembers(prev => prev.map(m => m.id === s.id ? { ...m, status: nextStatus } : m));
+                                    try {
+                                      await StaffService.updateStatus(s.id, { status: nextStatus });
+                                    } catch (err) {
+                                      console.warn("[UPDATE STATUS ERROR]", err);
+                                    }
+                                  }}
+                                  title="Click to cycle status (Present → Leave → Remote)"
+                                  className="px-2.5 py-1 rounded-full text-xs font-semibold transition hover:opacity-85 shadow-sm"
+                                  style={{ background:ss.bg, color:ss.text }}
+                                >
+                                  ● {s.status}
+                                </button>
+                              </td>
+                              <td className="px-5 py-3">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingStaffMember(s);
+                                      setStaffFormData({
+                                        name: s.name,
+                                        email: s.email || "",
+                                        phone: s.phone || "",
+                                        role: s.role,
+                                        department: s.department || s.dept || "Clinical",
+                                        schedule: s.schedule || "8AM–5PM",
+                                        status: s.status,
+                                      });
+                                      setStaffModalOpen(true);
+                                    }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+                                    title="Edit Staff Member"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!window.confirm(`Are you sure you want to remove ${s.name} from the staff directory?`)) return;
+                                      setStaffMembers(prev => prev.filter(m => m.id !== s.id));
+                                      try {
+                                        await StaffService.deleteStaff(s.id);
+                                      } catch (err) {
+                                        console.warn("[DELETE STAFF ERROR]", err);
+                                      }
+                                    }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition"
+                                    title="Delete Staff Member"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-8 text-center text-sm text-gray-500">
+                            No staff members found matching "{staffSearch}".
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── Add / Edit Staff Modal ── */}
+              {staffModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+                  <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">{editingStaffMember ? "Edit Staff Member" : "Add New Staff Member"}</h3>
+                        <p className="text-xs text-gray-500">Staff account will be synced to the clinic database.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setStaffModalOpen(false)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!staffFormData.name.trim() || !staffFormData.role.trim()) {
+                          alert("Please fill in staff name and role.");
+                          return;
+                        }
+
+                        if (editingStaffMember) {
+                          const id = editingStaffMember.id;
+                          setStaffMembers(prev => prev.map(m => m.id === id ? { ...m, ...staffFormData, dept: staffFormData.department } : m));
+                          setStaffModalOpen(false);
+
+                          try {
+                            await StaffService.updateStaff(id, staffFormData);
+                          } catch (err) {
+                            console.warn("[UPDATE STAFF ERROR]", err);
+                          }
+                        } else {
+                          const tempId = Date.now();
+                          const newStaffItem: StaffMember = {
+                            id: tempId,
+                            ...staffFormData,
+                            dept: staffFormData.department,
+                          };
+                          setStaffMembers(prev => [...prev, newStaffItem]);
+                          setStaffModalOpen(false);
+
+                          try {
+                            const res = await StaffService.createStaff(staffFormData);
+                            if (res.success && res.data) {
+                              setStaffMembers(prev => prev.map(m => m.id === tempId ? res.data : m));
+                            }
+                          } catch (err) {
+                            console.warn("[CREATE STAFF ERROR]", err);
+                          }
+                        }
+                      }}
+                      className="space-y-4"
+                    >
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Full Name *</label>
+                          <input
+                            required
+                            value={staffFormData.name}
+                            onChange={e => setStaffFormData(f => ({ ...f, name: e.target.value }))}
+                            placeholder="e.g. Dr. Kwame Asante"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Role / Designation *</label>
+                          <input
+                            required
+                            value={staffFormData.role}
+                            onChange={e => setStaffFormData(f => ({ ...f, role: e.target.value }))}
+                            placeholder="e.g. Senior Herbalist"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Department</label>
+                          <select
+                            value={staffFormData.department}
+                            onChange={e => setStaffFormData(f => ({ ...f, department: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          >
+                            {["Clinical", "Laboratory", "Dispensary", "CRM", "Admin", "Operations"].map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Working Schedule</label>
+                          <input
+                            value={staffFormData.schedule}
+                            onChange={e => setStaffFormData(f => ({ ...f, schedule: e.target.value }))}
+                            placeholder="e.g. 8AM–5PM"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Phone Number</label>
+                          <input
+                            value={staffFormData.phone}
+                            onChange={e => setStaffFormData(f => ({ ...f, phone: e.target.value }))}
+                            placeholder="+233 24 000 0000"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Email Address</label>
+                          <input
+                            type="email"
+                            value={staffFormData.email}
+                            onChange={e => setStaffFormData(f => ({ ...f, email: e.target.value }))}
+                            placeholder="staff@eduherbal.com"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Initial Status</label>
+                        <div className="mt-1.5 flex gap-3">
+                          {(["Present", "Leave", "Remote"] as const).map(st => (
+                            <label key={st} className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="staffStatus"
+                                value={st}
+                                checked={staffFormData.status === st}
+                                onChange={() => setStaffFormData(f => ({ ...f, status: st }))}
+                                className="text-green-600 focus:ring-green-600"
+                              />
+                              {st}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-3 border-t border-gray-100">
+                        <button
+                          type="submit"
+                          className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
+                          style={{ background:G }}
+                        >
+                          {editingStaffMember ? "Update Staff Profile" : "Save Staff Member"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffModalOpen(false)}
+                          className="rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Post Announcement Modal ── */}
+              {announcementModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+                  <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                          <Megaphone className="w-5 h-5 text-amber-600" /> Post Staff Announcement
+                        </h3>
+                        <p className="text-xs text-gray-500">Broadcast updates to all staff members.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAnnouncementModalOpen(false)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!announcementFormData.title.trim() || !announcementFormData.message.trim()) {
+                          alert("Please fill in announcement title and message.");
+                          return;
+                        }
+
+                        const newAnn: StaffAnnouncement = {
+                          id: Date.now(),
+                          title: announcementFormData.title.trim(),
+                          message: announcementFormData.message.trim(),
+                          author: currentStaffUser?.name || "Management",
+                          createdAt: new Date().toISOString(),
+                        };
+
+                        setStaffAnnouncements(prev => [newAnn, ...prev]);
+                        setAnnouncementModalOpen(false);
+                        setAnnouncementFormData({ title: "", message: "" });
+
+                        try {
+                          await StaffService.postAnnouncement(newAnn);
+                        } catch (err) {
+                          console.warn("[POST ANNOUNCEMENT ERROR]", err);
+                        }
+                      }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Announcement Title *</label>
+                        <input
+                          required
+                          value={announcementFormData.title}
+                          onChange={e => setAnnouncementFormData(a => ({ ...a, title: e.target.value }))}
+                          placeholder="e.g. Schedule Update / All-Staff Meeting"
+                          className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Announcement Message *</label>
+                        <textarea
+                          required
+                          rows={4}
+                          value={announcementFormData.message}
+                          onChange={e => setAnnouncementFormData(a => ({ ...a, message: e.target.value }))}
+                          placeholder="Write the briefing message or announcement for clinic staff…"
+                          className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
+                          style={{ background:OR }}
+                        >
+                          Broadcast Announcement
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAnnouncementModalOpen(false)}
+                          className="rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </>)}
 
           </main>
@@ -4099,7 +4692,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => {
-              if (view === "patient") {
+              if ((view as string) === "patient") {
                 setView("public");
                 setMenuOpen(false);
                 return;
