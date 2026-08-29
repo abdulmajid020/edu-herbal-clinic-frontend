@@ -5,7 +5,7 @@ import { Calendar, Phone, MapPin, MessageCircle, ShoppingBag,
   ArrowRight, Menu, X, LogIn, PhoneCall, PhoneMissed, PhoneForwarded, 
   FlaskConical, Send, Plus, Mail, Shield, ChevronRight, Bot,
   UserCheck, Pill, Download, LogOut, RefreshCw, Inbox, Home, Microscope, 
-  Footprints, BedDouble, Ambulance, Moon, Sun, Trash2, } from "lucide-react";
+  Footprints, BedDouble, Ambulance, Moon, Sun, Trash2, Megaphone, Pencil } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
@@ -677,7 +677,7 @@ export default function App() {
   const [adminMobileMenuOpen, setAdminMobileMenuOpen] = useState(false);
   const [patientTab,    setPatientTab   ] = useState("orders");
   const [cart,          setCart         ] = useState<Record<number,number>>({});
-  const [staffMembers,  setStaffMembers ] = useState<StaffMember[]>(() => STAFF_LIST.map((s, idx) => ({ id: idx + 1, ...s, department: s.dept })));
+  const [staffMembers,  setStaffMembers ] = useState<StaffMember[]>(() => STAFF_LIST.map((s, idx) => ({ id: idx + 1, ...s, department: s.dept, status: s.status as "Present" | "Leave" | "Remote" })));
   const [staffAnnouncements, setStaffAnnouncements] = useState<StaffAnnouncement[]>([
     {
       id: 1,
