@@ -836,14 +836,38 @@ export default function App() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const path = window.location.pathname;
-    if (path === "/admin") {
+    if (path.startsWith("/admin")) {
       setView("admin");
-    } else if (path === "/patient") {
+    } else if (path.startsWith("/patient")) {
       setView("patient");
     } else {
       setView("public");
     }
 
+    const handlePopState = () => {
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith("/admin")) {
+        setView("admin");
+      } else if (currentPath.startsWith("/patient")) {
+        setView("patient");
+      } else {
+        setView("public");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const targetPath = view === "admin" ? "/admin" : view === "patient" ? "/patient" : "/";
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, "", targetPath);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     // Verify existing token on initial mount
     const token = getAuthToken();
     if (token) {
