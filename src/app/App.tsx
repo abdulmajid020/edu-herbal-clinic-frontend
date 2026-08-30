@@ -1,24 +1,17 @@
 import { useState, useRef, useEffect } from "react";
-import { Calendar, Phone, MapPin, MessageCircle, ShoppingBag,
-  ChevronDown, ChevronLeft, Star, Clock, Users, TrendingUp, Package,
-  FileText, Leaf, Stethoscope, AlertTriangle, Search, CheckCircle, 
-  ArrowRight, Menu, X, LogIn, PhoneCall, PhoneMissed, PhoneForwarded, 
-  FlaskConical, Send, Plus, Mail, Shield, ChevronRight, Bot,
-  UserCheck, Pill, Download, LogOut, RefreshCw, Inbox, Home, Microscope, 
-  Footprints, BedDouble, Ambulance, Moon, Sun, Trash2, Megaphone, Pencil } from "lucide-react";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
-} from "recharts";
+  Calendar, Phone, MapPin, MessageCircle, ShoppingBag,
+  ChevronDown, ChevronLeft, Star, Clock, Users, TrendingUp, Package,
+  Leaf, Stethoscope, AlertTriangle, Search, CheckCircle,
+  ArrowRight, Menu, X, LogIn, PhoneCall, PhoneMissed, PhoneForwarded,
+  Send, Plus, Mail, Shield, ChevronRight, Bot, LogOut,
+  Inbox, Microscope, Moon, Sun, Trash2, Megaphone, Pencil,
+  FlaskConical, Footprints, BedDouble, Ambulance, Home, UserCheck
+} from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/app/components/ui/carousel";
-import { AuthService, getAuthToken, StaffUser } from "../../services/authService";
-import { ProductService, Product } from "../../services/productService";
-import { InventoryService, InventoryItem } from "../../services/inventoryService";
-import { AppointmentService } from "../../services/appointmentService";
-import { PatientService, Patient } from "../../services/patientService";
-import { CallService, CallLog } from "../../services/callService";
-import { StaffService, StaffMember, StaffAnnouncement } from "../../services/staffService";
+import { AuthService, getAuthToken, StaffUser, ProductService, InventoryService, AppointmentService, PatientService, CallService, CallLog, StaffService, StaffMember, StaffAnnouncement, OrderService, PaymentService, ChatService } from "@/services";
 import clinicLogo from "@/imports/photo_2024-05-10_11-09-44-1.jpg";
 import service5Image from "@/imports/service-5.jpg";
 import service1Image from "@/imports/service-1.jpg";
@@ -84,7 +77,7 @@ type PatientPayment = {
   amount: number;
   date: string;
   method: string;
-  status: "Paid" | "Pending";
+  status: "Paid" | "Pending" | "Refunded";
   recipientName?: string;
   recipientNumber?: string;
   createdAt: string;
@@ -702,6 +695,8 @@ export default function App() {
   const [announcementFormData, setAnnouncementFormData] = useState({
     title: "",
     message: "",
+    date: "",
+    time: "",
   });
   const [staffFilter,   setStaffFilter  ] = useState<"Present" | "Leave" | "Remote" | null>(null);
   const [staffSearch,   setStaffSearch  ] = useState("");
@@ -721,6 +716,14 @@ export default function App() {
     doctorId: DOCTORS[0].id,
     date: "",
     time: "",
+  });
+  const [crmBookModalOpen, setCrmBookModalOpen] = useState(false);
+  const [crmBookPatient, setCrmBookPatient] = useState<PatientEntry | null>(null);
+  const [crmBookFormData, setCrmBookFormData] = useState({
+    doctorId: DOCTORS[0].id,
+    service: "Herbal Consultation",
+    date: "",
+    time: "10:00 AM",
   });
   const [inventoryItems, setInventoryItems] = useState<any[]>(INVENTORY);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -780,6 +783,7 @@ export default function App() {
   const [socialModal, setSocialModal] = useState<{ label: string; href: string } | null>(null);
   const chatEncryptionKeyRef = useRef<CryptoKey | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
   const chatBroadcastRef = useRef<BroadcastChannel | null>(null);
 
   const locationCards = [
@@ -803,7 +807,23 @@ export default function App() {
     },
   ];
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior:"smooth" }); }, [chatMessages]);
+  const scrollToChatBottom = (smooth = true) => {
+    if (chatMessagesContainerRef.current) {
+      chatMessagesContainerRef.current.scrollTo({
+        top: chatMessagesContainerRef.current.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    }
+    chatEndRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "nearest" });
+  };
+
+  useEffect(() => {
+    if (chatOpen && chatAuthenticated) {
+      scrollToChatBottom(false);
+      const timer = window.setTimeout(() => scrollToChatBottom(true), 80);
+      return () => window.clearTimeout(timer);
+    }
+  }, [chatMessages, chatOpen, chatAuthenticated]);
 
   useEffect(() => {
     if (!blogAutoPlaying) return;
@@ -917,6 +937,63 @@ export default function App() {
         }
       })
       .catch(err => console.warn("[STAFF] Live fetch error, using default staff:", err));
+
+    // Live fetch of Orders and Payments from backend
+    OrderService.getOrders()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setPatientOrders(res.data.map(o => ({
+            id: o.id,
+            description: o.description,
+            amount: o.amount,
+            date: o.date,
+            method: o.method,
+            items: o.items || [],
+            createdAt: o.createdAt || new Date().toISOString(),
+          })));
+        }
+      })
+      .catch(err => console.warn("[ORDERS] Live fetch error, using default orders:", err));
+
+    PaymentService.getPayments()
+      .then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setPatientPayments(res.data.map(p => ({
+            id: p.id,
+            description: p.description,
+            amount: p.amount,
+            date: p.date,
+            method: p.method,
+            status: p.status as "Paid" | "Pending" | "Refunded",
+            recipientName: p.recipientName,
+            recipientNumber: p.recipientNumber,
+            createdAt: p.createdAt || new Date().toISOString(),
+          })));
+        }
+      })
+      .catch(err => console.warn("[PAYMENTS] Live fetch error, using default payments:", err));
+
+    // Live fetch of Chat conversations from backend
+    ChatService.getAdminConversations()
+      .then(res => {
+        if (res.success && Array.isArray(res.conversations) && res.conversations.length > 0) {
+          const flatMessages = res.conversations.flatMap(c => c.messages || []);
+          if (flatMessages.length > 0) {
+            setPatientChat(flatMessages.map(m => ({
+              role: m.role,
+              text: m.text,
+              createdAt: m.createdAt,
+              phone: m.phone,
+              patientName: m.patientName || undefined,
+              sender: m.sender,
+              handoverRequested: m.handoverRequested,
+              handoverHandled: m.handoverHandled,
+              handoverClosed: m.handoverClosed,
+            })));
+          }
+        }
+      })
+      .catch(err => console.warn("[CHAT] Live fetch error, using local chat store:", err));
   }, []);
 
   useEffect(() => {
@@ -1027,25 +1104,26 @@ export default function App() {
     if (typeof window === "undefined") return;
     const refreshPatientChat = () => {
       const nextMessages = getStoredPatientChat();
-      setPatientChat(nextMessages);
-      if (chatAuthenticated && chatPhone) {
-        const conversationMessages = nextMessages
-          .filter(message => message.phone === chatPhone)
-          .map(message => ({ role: message.role, text: message.text }));
-        if (conversationMessages.length > 0) {
-          setChatMessages(conversationMessages);
+      if (Array.isArray(nextMessages) && nextMessages.length > 0) {
+        setPatientChat(nextMessages);
+        if (chatAuthenticated && chatPhone) {
+          const conversationMessages = nextMessages
+            .filter(message => message.phone === chatPhone)
+            .map(message => ({ role: message.role, text: message.text }));
+          if (conversationMessages.length > 0) {
+            setChatMessages(prev => {
+              if (conversationMessages.length >= prev.length) {
+                return conversationMessages;
+              }
+              return prev;
+            });
+          }
         }
       }
     };
     window.addEventListener("storage", refreshPatientChat);
-    window.addEventListener("focus", refreshPatientChat);
-    document.addEventListener("visibilitychange", refreshPatientChat);
-    const refreshTimer = window.setInterval(refreshPatientChat, 1000);
     return () => {
       window.removeEventListener("storage", refreshPatientChat);
-      window.removeEventListener("focus", refreshPatientChat);
-      document.removeEventListener("visibilitychange", refreshPatientChat);
-      window.clearInterval(refreshTimer);
     };
   }, [chatAuthenticated, chatPhone]);
 
@@ -1055,12 +1133,21 @@ export default function App() {
     chatBroadcastRef.current = channel;
     channel.onmessage = () => {
       const nextMessages = getStoredPatientChat();
-      setPatientChat(nextMessages);
-      if (chatAuthenticated && chatPhone) {
-        const conversationMessages = nextMessages
-          .filter(message => message.phone === chatPhone)
-          .map(message => ({ role: message.role, text: message.text }));
-        if (conversationMessages.length > 0) setChatMessages(conversationMessages);
+      if (Array.isArray(nextMessages) && nextMessages.length > 0) {
+        setPatientChat(nextMessages);
+        if (chatAuthenticated && chatPhone) {
+          const conversationMessages = nextMessages
+            .filter(message => message.phone === chatPhone)
+            .map(message => ({ role: message.role, text: message.text }));
+          if (conversationMessages.length > 0) {
+            setChatMessages(prev => {
+              if (conversationMessages.length >= prev.length) {
+                return conversationMessages;
+              }
+              return prev;
+            });
+          }
+        }
       }
     };
     return () => {
@@ -1138,12 +1225,38 @@ export default function App() {
       .filter(message => message.phone === normalizedPhone)
       .map(message => ({ role: message.role, text: message.text }));
     setChatMessages(existingConversation);
+
+    // Sync with backend API
+    ChatService.authenticate(normalizedName, normalizedPhone)
+      .then(res => {
+        if (res.success && Array.isArray(res.messages) && res.messages.length > 0) {
+          const apiMessages: PatientChatMessage[] = res.messages.map(m => ({
+            role: m.role,
+            text: m.text,
+            createdAt: m.createdAt,
+            phone: m.phone,
+            patientName: m.patientName || normalizedName,
+            sender: m.sender,
+            handoverRequested: m.handoverRequested,
+            handoverHandled: m.handoverHandled,
+            handoverClosed: m.handoverClosed,
+          }));
+          setPatientChat(prev => {
+            const others = prev.filter(p => p.phone !== normalizedPhone);
+            return [...others, ...apiMessages];
+          });
+          setChatMessages(apiMessages.map(m => ({ role: m.role, text: m.text })));
+        }
+      })
+      .catch(err => console.warn("[CHAT AUTH API ERROR, using local state]:", err));
   };
 
   const appendAdminChatMessage = (message: PatientChatMessage) => {
     if (typeof window === "undefined") return;
     const existingMessages = getStoredPatientChat();
-    window.localStorage.setItem("eduPatientChatAdmin", JSON.stringify([...existingMessages, message]));
+    const filtered = existingMessages.filter(m => !(m.phone === message.phone && m.text === message.text && m.createdAt === message.createdAt));
+    const nextList = [...filtered, message];
+    window.localStorage.setItem("eduPatientChatAdmin", JSON.stringify(nextList));
     chatBroadcastRef.current?.postMessage({ type: "chat-updated", phone: message.phone });
   };
 
@@ -1156,9 +1269,18 @@ export default function App() {
     const requestsHandover = /\b(talk|speak|chat|connect|contact)\b.*\b(someone|person|human|agent|staff|doctor|practitioner|admin|administrator|clinic team)\b|\b(someone|person|human|agent|staff|doctor|practitioner|admin|administrator|clinic team)\b.*\b(talk|speak|chat|connect|contact)\b/i.test(lowerMessage);
     const handoverActive = patientChat.some(message => message.phone === chatPhone && message.handoverRequested && !message.handoverClosed);
     const patientMessage: PatientChatMessage = { role:"user", text:msg, createdAt, phone:chatPhone, patientName:chatPatientName, sender:"patient", handoverRequested:requestsHandover };
-    appendAdminChatMessage(patientMessage);
-    setPatientChat(messages => [...messages, patientMessage]);
+    
+    // Immediately display user message in chat
     setChatMessages(messages => [...messages, { role:"user", text:msg }]);
+    setPatientChat(messages => [...messages, patientMessage]);
+    appendAdminChatMessage(patientMessage);
+
+    // Sync message with backend API
+    ChatService.sendMessage({
+      phone: chatPhone,
+      patientName: chatPatientName,
+      text: msg,
+    }).catch(err => console.warn("[CHAT SEND API ERROR, preserved locally]:", err));
 
     let reply: string | null = null;
     if (requestsHandover) {
@@ -1271,7 +1393,7 @@ export default function App() {
         setChatMessages(messages => [...messages, { role:"bot", text:reply }]);
         appendAdminChatMessage(botMessage);
         setPatientChat(messages => [...messages, botMessage]);
-      }, 450);
+      }, 400);
     }
   };
 
@@ -1605,6 +1727,29 @@ export default function App() {
     setCheckoutMessage(`Payment successful. ${totalItems} medication item(s) have been added to your payment history.`);
     setView("patient");
     setPatientTab("orders");
+
+    // Persist to backend database
+    OrderService.checkout({
+      items: selectedItems.map(item => ({
+        productId: item.product?.id,
+        name: item.product?.name || "Medicine",
+        quantity: item.quantity,
+        price: item.product?.price || 0,
+      })),
+      paymentMethod: selectedMethod,
+      recipientName: selectedName,
+      recipientNumber: selectedNumber,
+    })
+      .then(res => {
+        if (res.success) {
+          InventoryService.getInventory().then(invRes => {
+            if (invRes.success && Array.isArray(invRes.data)) {
+              setInventoryItems(invRes.data);
+            }
+          }).catch(() => null);
+        }
+      })
+      .catch(err => console.warn("[ORDER CHECKOUT API ERROR]", err));
   };
 
   const confirmPaymentDetails = () => {
@@ -1869,59 +2014,89 @@ export default function App() {
     }, ...prev]);
   };
 
-  const handleAdminBookAppointment = async (patient: PatientEntry) => {
-    if (typeof window === "undefined") return;
-
+  const openAdminBookAppointmentModal = (patient: PatientEntry) => {
     const defaultDoctor = DOCTORS.find(d => d.name === patient.doctor) ?? DOCTORS[0];
-    const [existingDate, existingTime] = patient.nextAppt.includes("·")
-      ? patient.nextAppt.split("·").map(part => part.trim())
-      : ["", ""];
+    let initialDate = "";
+    let initialTime = "10:00 AM";
 
-    const appointmentDate = window.prompt("Enter appointment date", existingDate || "")?.trim();
-    const appointmentTime = window.prompt("Enter appointment time", existingTime || "10:00 AM")?.trim();
+    if (patient.nextAppt && patient.nextAppt.includes("·")) {
+      const [d, t] = patient.nextAppt.split("·").map(part => part.trim());
+      initialDate = d || "";
+      initialTime = t || "10:00 AM";
+    }
 
-    if (!appointmentDate || !appointmentTime) return;
+    setCrmBookPatient(patient);
+    setCrmBookFormData({
+      doctorId: defaultDoctor.id,
+      service: patient.condition || "Herbal Consultation",
+      date: initialDate || new Date().toISOString().split("T")[0],
+      time: initialTime || "10:00 AM",
+    });
+    setCrmBookModalOpen(true);
+  };
 
+  const handleAdminBookSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!crmBookPatient) return;
+    const { doctorId, service, date, time } = crmBookFormData;
+    if (!date || !time) return;
+
+    const assignedDoctor = DOCTORS.find(d => d.id === Number(doctorId)) ?? DOCTORS[0];
     const updatedPatient = {
-      ...patient,
-      nextAppt: `${appointmentDate} · ${appointmentTime}`,
-      doctor: defaultDoctor.name,
-      status: "Pending",
+      ...crmBookPatient,
+      nextAppt: `${date} · ${time}`,
+      doctor: assignedDoctor.name,
+      condition: service || crmBookPatient.condition,
+      status: "Active",
     } as PatientEntry;
 
     try {
+      // 1. Create appointment in PostgreSQL database
       await AppointmentService.bookAppointment({
-        service: patient.condition || "Herbal Consultation",
-        doctorId: defaultDoctor.id,
-        fullName: patient.name,
-        phone: patient.phone,
-        date: appointmentDate,
-        time: appointmentTime,
+        service: service || crmBookPatient.condition || "Herbal Consultation",
+        doctorId: assignedDoctor.id,
+        fullName: crmBookPatient.name,
+        phone: crmBookPatient.phone,
+        date,
+        time,
       });
+
+      // 2. Update patient record in PostgreSQL CRM table
+      if (crmBookPatient.id && typeof crmBookPatient.id === "number") {
+        await PatientService.updatePatient(crmBookPatient.id, {
+          nextAppt: `${date} · ${time}`,
+          condition: service || crmBookPatient.condition,
+          status: "Active",
+        }).catch(() => null);
+      }
     } catch (apiErr) {
       console.warn("[ADMIN BOOK APPT API ERROR]", apiErr);
     }
 
-    setCrmPatients(prev => prev.map(item => item.id === patient.id ? updatedPatient : item));
-    setSelPatient(updatedPatient);
+    setCrmPatients(prev => prev.map(item => item.id === crmBookPatient.id ? updatedPatient : item));
+    if (selPatient?.id === crmBookPatient.id) {
+      setSelPatient(updatedPatient);
+    }
     addPatientAppointment({
-      patientName: patient.name,
-      phone: patient.phone,
-      service: patient.condition,
-      doctor: defaultDoctor.name,
-      date: appointmentDate,
-      time: appointmentTime,
+      patientName: crmBookPatient.name,
+      phone: crmBookPatient.phone,
+      service: service || crmBookPatient.condition,
+      doctor: assignedDoctor.name,
+      date,
+      time,
       status: "Confirmed",
     });
     sendAppointmentSms({
-      fullName: patient.name,
-      phone: patient.phone,
-      service: patient.condition,
-      doctorId: defaultDoctor.id,
-      date: appointmentDate,
-      time: appointmentTime,
+      fullName: crmBookPatient.name,
+      phone: crmBookPatient.phone,
+      service: service || crmBookPatient.condition,
+      doctorId: assignedDoctor.id,
+      date,
+      time,
     });
     setBookingSmsStatus("Appointment booked for the patient and confirmation SMS prepared.");
+    setCrmBookModalOpen(false);
+    setCrmBookPatient(null);
   };
 
   const handleCreateNewPatient = async () => {
@@ -2177,7 +2352,11 @@ export default function App() {
       .sort((a, b) => b.sold - a.sold || b.revenue - a.revenue);
 
     if (ranked.every(item => item.sold === 0)) {
-      return TOP_PRODUCTS_DATA;
+      return PRODUCTS.slice(0, 5).map(product => ({
+        name: product.name,
+        sold: 0,
+        revenue: 0,
+      }));
     }
 
     return ranked.slice(0, 5);
@@ -2355,14 +2534,82 @@ export default function App() {
   const todayAppointments = patientAppointments
     .filter(appt => appt.date === todayDate)
     .sort((a, b) => a.time.localeCompare(b.time));
-  const patientsTodayCount = todayAppointments.length;
+  const displaySchedule = todayAppointments.length > 0
+    ? todayAppointments
+    : patientAppointments.slice(0, 6);
+  const patientsTodayCount = todayAppointments.length > 0 ? todayAppointments.length : patientAppointments.filter(a => a.status === "Confirmed").length;
   const newPatientsCount = crmPatients.filter(p =>
-    p.lastVisit === "Just added" || p.status === "Pending"
+    p.lastVisit === "Just added" || p.status === "Pending" || p.status === "Active"
   ).length;
   const revenueTodayTotal = patientPayments
-    .filter(payment => payment.date === todayDate || payment.createdAt.startsWith(todayDate))
+    .filter(payment => payment.status === "Paid" && (payment.date === todayDate || payment.createdAt.startsWith(todayDate)))
     .reduce((sum, payment) => sum + payment.amount, 0);
   const missedAppointments = callStats.missed;
+
+  const dynamicConditionsData = (() => {
+    if (!crmPatients || crmPatients.length === 0) return [];
+    const counts: Record<string, number> = {};
+    crmPatients.forEach(p => {
+      const cond = p.condition?.trim() || "General Consultation";
+      counts[cond] = (counts[cond] || 0) + 1;
+    });
+    const total = crmPatients.length;
+    const palette = [G, OR, R, "#2563eb", "#7c3aed", "#0d9488", "#db2777"];
+    return Object.entries(counts).map(([name, count], idx) => ({
+      name,
+      value: Math.round((count / total) * 100),
+      count,
+      color: palette[idx % palette.length],
+    }));
+  })();
+
+  const dynamicSalesData = (() => {
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const now = new Date();
+    const result = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthIdx = d.getMonth();
+      const monthName = monthNames[monthIdx];
+      const year = d.getFullYear();
+      const mStart = new Date(year, monthIdx, 1);
+      const mEnd = new Date(year, monthIdx + 1, 0, 23, 59, 59);
+
+      const monthlyPaymentRevenue = patientPayments
+        .filter(p => {
+          if (p.status !== "Paid") return false;
+          const pDate = normalizeDateString(p.date) || normalizeDateString(p.createdAt);
+          return pDate ? pDate >= mStart && pDate <= mEnd : false;
+        })
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      const monthlyOrderRevenue = patientOrders
+        .filter(o => {
+          const oDate = normalizeDateString(o.date) || normalizeDateString(o.createdAt);
+          return oDate ? oDate >= mStart && oDate <= mEnd : false;
+        })
+        .reduce((sum, o) => sum + (o.amount || 0), 0);
+
+      const reportMatch = monthlyReports.find(r => r.month.toLowerCase().startsWith(monthName.toLowerCase()) && r.year === year);
+      const reportRev = reportMatch?.totalRevenue || 0;
+
+      const totalMonthlyRev = monthlyPaymentRevenue + monthlyOrderRevenue + reportRev;
+
+      const apptCount = patientAppointments.filter(a => {
+        const aDate = normalizeDateString(a.date) || normalizeDateString(a.createdAt);
+        return aDate ? aDate >= mStart && aDate <= mEnd : false;
+      }).length;
+
+      result.push({
+        month: monthName,
+        revenue: totalMonthlyRev,
+        patients: apptCount,
+      });
+    }
+
+    return result;
+  })();
 
   const markChatConversationHandled = (conversationKey: string) => {
     setPatientChat(messages => messages.map(message => {
@@ -2373,35 +2620,48 @@ export default function App() {
 
   const closeChatHandover = (conversationKey: string) => {
     if (typeof window !== "undefined" && !window.confirm("Close this human handover and let EduBot take over again?")) return;
+    const targetMsg = patientChat.find(m => (m.phone || `name:${m.patientName}`) === conversationKey);
     setPatientChat(messages => messages.map(message => {
       const key = message.phone || `name:${message.patientName || "Unknown patient"}`;
       return key === conversationKey ? { ...message, handoverClosed: true, handoverHandled: true } : message;
     }));
+
+    if (targetMsg?.phone) {
+      ChatService.closeHandover(targetMsg.phone).catch(err => console.warn("[CLOSE HANDOVER API ERROR]:", err));
+    }
   };
 
   const sendAdminChatMessage = (conversationKey: string, patientName: string, phone: string) => {
     const text = (adminChatDrafts[conversationKey] || "").trim();
     if (!text || !phone || phone === "Number unavailable") return;
+    const newMsg: PatientChatMessage = {
+      role: "bot",
+      text,
+      createdAt: new Date().toISOString(),
+      phone,
+      patientName,
+      sender: "staff",
+      handoverHandled: true,
+    };
     setPatientChat(messages => [
       ...messages.map(message => {
         const key = message.phone || `name:${message.patientName || "Unknown patient"}`;
         return key === conversationKey ? { ...message, handoverHandled: true } : message;
       }),
-      {
-        role: "bot",
-        text,
-        createdAt: new Date().toISOString(),
-        phone,
-        patientName,
-        sender: "staff",
-        handoverHandled: true,
-      },
+      newMsg,
     ]);
     setAdminChatDrafts(drafts => ({ ...drafts, [conversationKey]: "" }));
+
+    ChatService.adminReply({
+      phone,
+      patientName,
+      text,
+    }).catch(err => console.warn("[CHAT ADMIN REPLY API ERROR]:", err));
   };
 
   const removeChatConversation = (conversationKey: string) => {
     if (typeof window !== "undefined" && !window.confirm("Remove this patient's entire chat conversation?")) return;
+    const targetMsg = patientChat.find(m => (m.phone || `name:${m.patientName}`) === conversationKey);
     setPatientChat(messages => messages.filter(message => {
       const key = message.phone || `name:${message.patientName || "Unknown patient"}`;
       return key !== conversationKey;
@@ -2411,6 +2671,10 @@ export default function App() {
       delete next[conversationKey];
       return next;
     });
+
+    if (targetMsg?.phone) {
+      ChatService.deleteConversation(targetMsg.phone).catch(err => console.warn("[DELETE CONVERSATION API ERROR]:", err));
+    }
   };
 
   const saveCallNote = async (callId: number) => {
@@ -2453,15 +2717,17 @@ export default function App() {
     }
   };
 
-  const openInventoryRestock = (itemName: string) => {
+  const [isEditingExistingStock, setIsEditingExistingStock] = useState(false);
+  const openInventoryRestock = (itemName: string, isEdit = false) => {
     const existingItem = inventoryItems.find(item => item.item === itemName);
     const matchingProduct = PRODUCTS.find(product => product.name === itemName);
     setSelectedInventoryItem(itemName);
+    setIsEditingExistingStock(isEdit);
     setInventoryFormOpen(true);
     setInventoryFormData({
       item: itemName,
       category: existingItem?.category || matchingProduct?.category || inventoryFormData.category || "General",
-      stock: "0",
+      stock: isEdit ? String(existingItem?.stock ?? 0) : "10",
       min: String(existingItem?.min ?? (matchingProduct as any)?.min ?? 5),
       unit: existingItem?.unit || "units",
     });
@@ -2478,29 +2744,39 @@ export default function App() {
 
     try {
       setInventoryLoading(true);
-      const res = await InventoryService.restock({
-        item: itemName,
-        category: category || "General",
-        stock: Number.isFinite(stock) ? stock : 0,
-        min,
-        unit,
-      });
+      if (isEditingExistingStock) {
+        setInventoryItems(prev => prev.map(entry => entry.item.toLowerCase() === itemName.toLowerCase() ? {
+          ...entry,
+          category: category || entry.category,
+          stock: Number.isFinite(stock) ? stock : entry.stock,
+          min: Number.isFinite(min) ? min : entry.min,
+          unit: unit || entry.unit,
+        } : entry));
+      } else {
+        const res = await InventoryService.restock({
+          item: itemName,
+          category: category || "General",
+          stock: Number.isFinite(stock) ? stock : 0,
+          min,
+          unit,
+        });
 
-      if (res.success) {
-        const invRes = await InventoryService.getInventory();
-        if (invRes.success && Array.isArray(invRes.data)) {
-          setInventoryItems(invRes.data);
+        if (res.success) {
+          const invRes = await InventoryService.getInventory();
+          if (invRes.success && Array.isArray(invRes.data)) {
+            setInventoryItems(invRes.data);
+          }
         }
       }
     } catch (err) {
-      console.error("Restock failed on backend, updating locally:", err);
+      console.error("Inventory update failed on backend, updating locally:", err);
       setInventoryItems(prev => {
         const existing = prev.find(entry => entry.item.toLowerCase() === itemName.toLowerCase());
         if (existing) {
           return prev.map(entry => entry.item.toLowerCase() === itemName.toLowerCase() ? {
             ...entry,
             category: category || entry.category,
-            stock: entry.stock + (Number.isFinite(stock) ? stock : 0),
+            stock: isEditingExistingStock ? (Number.isFinite(stock) ? stock : entry.stock) : (entry.stock + (Number.isFinite(stock) ? stock : 0)),
             min: Number.isFinite(min) ? min : entry.min,
             unit: unit || entry.unit,
           } : entry);
@@ -2511,6 +2787,7 @@ export default function App() {
     } finally {
       setInventoryLoading(false);
       setInventoryFormOpen(false);
+      setIsEditingExistingStock(false);
       setInventoryFormData({ item: itemName, category, stock: "0", min: String(min || 5), unit });
     }
   };
@@ -3244,8 +3521,12 @@ export default function App() {
             {adminTab === "overview" && (<>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <h1 className="font-display text-3xl font-bold text-gray-900">Good morning, Grace 👋</h1>
-                  <p className="text-gray-400 mt-1">Tuesday, 8 July 2025 · Accra Branch</p>
+                  <h1 className="font-display text-3xl font-bold text-gray-900">
+                    {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening"}, {currentStaffUser?.name ? currentStaffUser.name.split(" ")[0] : "Grace"} 👋
+                  </h1>
+                  <p className="text-gray-500 mt-1 font-medium">
+                    {new Date().toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · Accra Branch
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -3285,7 +3566,7 @@ export default function App() {
                 <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4" style={{ color:G }} />
-                    <p className="text-sm font-semibold text-gray-900">Priority focus</p>
+                    <p className="text-sm font-bold text-gray-900">Priority focus</p>
                   </div>
                   <ul className="mt-3 space-y-2 text-sm text-gray-600">
                     <li className="flex items-center gap-2"><CheckCircle className="h-4 w-4" style={{ color:G }} /> {followUpCount > 0 ? `${followUpCount} patient follow-up${followUpCount === 1 ? "" : "s"} due today` : "No patient follow-ups due today"}</li>
@@ -3298,10 +3579,10 @@ export default function App() {
               {/* KPI cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {[
-                  { label:"Patients Today", value: patientsTodayCount.toString(), icon:Users, color:G, delta:"+4", onClick: () => setAdminTab("crm") },
-                  { label:"New Patients", value: newPatientsCount.toString(), icon:Plus, color:OR, delta:"+2", onClick: () => setAdminTab("crm") },
-                  { label:"Revenue Today", value: `GHS ${revenueTodayTotal.toLocaleString()}`, icon:TrendingUp, color:G, delta:"+12%", onClick: () => setAdminTab("sales") },
-                  { label:"Missed Appts", value: missedAppointments.toString(), icon:AlertTriangle, color:R, delta:"–1", onClick: () => setAdminTab("callcentre") },
+                  { label:"Patients Today", value: patientsTodayCount.toString(), icon:Users, color:G, delta:`+${patientsTodayCount}`, onClick: () => setAdminTab("crm") },
+                  { label:"New Patients", value: newPatientsCount.toString(), icon:Plus, color:OR, delta:`+${newPatientsCount}`, onClick: () => setAdminTab("crm") },
+                  { label:"Revenue Today", value: `GHS ${revenueTodayTotal.toLocaleString()}`, icon:TrendingUp, color:G, delta: revenueTodayTotal > 0 ? "+100%" : "GHS 0", onClick: () => setAdminTab("sales") },
+                  { label:"Missed Calls / Pending", value: (callbackReviewCount || missedAppointments).toString(), icon:AlertTriangle, color:R, delta: callbackReviewCount > 0 ? `–${callbackReviewCount}` : "0", onClick: () => setAdminTab("callcentre") },
                 ].map(k => (
                   <button
                     key={k.label}
@@ -3348,9 +3629,11 @@ export default function App() {
               {/* Charts row */}
               <div className="grid lg:grid-cols-3 gap-5">
                 <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                  <p className="font-semibold text-gray-900 mb-4">Revenue — 7 months (GHS)</p>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="font-semibold text-gray-900">Revenue — 7 months (GHS)</p>
+                  </div>
                   <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={SALES_DATA}>
+                    <AreaChart data={dynamicSalesData}>
                       <defs>
                         <linearGradient id="gfill" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%"  stopColor={G} stopOpacity={0.18} />
@@ -3366,32 +3649,54 @@ export default function App() {
                   </ResponsiveContainer>
                 </div>
                 <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                  <p className="font-semibold text-gray-900 mb-4">Conditions</p>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <PieChart>
-                      <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={3} dataKey="value">
-                        {PIE_DATA.map((entry,i) => <Cell key={i} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ borderRadius:8, fontSize:12 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-1.5 mt-2">
-                    {PIE_DATA.map(d => (
-                      <div key={d.name} className="flex items-center gap-2 text-xs">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background:d.color }} />
-                        <span className="text-gray-400 flex-1">{d.name}</span>
-                        <span className="font-bold text-gray-800">{d.value}%</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="font-semibold text-gray-900">Patient Conditions</p>
+                    <span className="text-xs text-gray-400">{crmPatients.length} registered</span>
                   </div>
+                  {dynamicConditionsData.length > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={150}>
+                        <PieChart>
+                          <Pie data={dynamicConditionsData} cx="50%" cy="50%" innerRadius={42} outerRadius={65} paddingAngle={3} dataKey="value">
+                            {dynamicConditionsData.map((entry,i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                          <Tooltip contentStyle={{ borderRadius:8, fontSize:12 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-1.5 mt-2">
+                        {dynamicConditionsData.slice(0, 5).map(d => (
+                          <div key={d.name} className="flex items-center gap-2 text-xs">
+                            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background:d.color }} />
+                            <span className="text-gray-500 font-medium flex-1 truncate">{d.name}</span>
+                            <span className="font-bold text-gray-800">{d.value}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex h-40 items-center justify-center text-xs text-gray-400">
+                      No patient condition data registered yet.
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Today's schedule */}
               <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                <p className="font-semibold text-gray-900 mb-4">Today's Schedule</p>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="font-semibold text-gray-900">Today's Schedule</p>
+                    <p className="text-xs text-gray-400">Consultations and appointments scheduled for today</p>
+                  </div>
+                  <button
+                    onClick={() => { setAdminTab("crm"); setCrmNewPatientOpen(true); }}
+                    className="text-xs font-semibold text-green-700 hover:text-green-800"
+                  >
+                    + Book Slot
+                  </button>
+                </div>
                 <div className="space-y-2">
-                  {todayAppointments.length > 0 ? todayAppointments.map((a,i) => {
+                  {todayAppointments.length > 0 ? todayAppointments.map((a) => {
                     const statusLabel = a.status === "Pending" ? "Waiting" : a.status;
                     const sc = a.status === "Completed"
                       ? { bg: "#dcfce7", text: "#15803d" }
@@ -3401,19 +3706,31 @@ export default function App() {
                           ? { bg: "#fef9c3", text: "#854d0e" }
                           : { bg: "#f3f4f6", text: "#6b7280" };
                     return (
-                      <button
+                      <div
                         key={a.id}
-                        type="button"
-                        onClick={() => {
-                          setView("patient");
-                          setPatientTab("orders");
-                        }}
-                        className="flex items-center gap-4 w-full text-left py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50/80 px-2 rounded-xl transition-colors"
                       >
-                        <span className="text-xs font-medium text-gray-400 w-20">{a.time}</span>
-                        <span className="flex-1 text-sm"><span className="font-semibold text-gray-900">{a.patientName}</span><span className="text-gray-400 ml-2">· {a.doctor} · {a.service}</span></span>
-                        <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ background: sc.bg, color: sc.text }}>{statusLabel}</span>
-                      </button>
+                        <div className="flex items-center gap-3">
+                          <div className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-md shrink-0">{a.time || "10:00 AM"}</div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{a.patientName}</p>
+                            <p className="text-xs text-gray-400">{a.doctor || "Dr. Edu Mohammed"} · {a.service || "Herbal Consultation"}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 self-start sm:self-auto">
+                          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ background: sc.bg, color: sc.text }}>{statusLabel}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminTab("crm");
+                              setSearchCRM(a.patientName);
+                            }}
+                            className="text-xs font-semibold text-gray-500 hover:text-gray-800 underline ml-2"
+                          >
+                            View CRM
+                          </button>
+                        </div>
+                      </div>
                     );
                   }) : (
                     <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500">
@@ -3437,26 +3754,45 @@ export default function App() {
                 </button>
               </div>
               {crmNewPatientOpen && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center justify-between">
+                <div className="bg-white rounded-2xl border-2 border-emerald-600/30 shadow-lg p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <div>
                       <p className="font-semibold text-gray-900">Create patient and booking</p>
                       <p className="text-sm text-gray-500">Add a new patient and schedule their first appointment.</p>
                     </div>
-                    <button onClick={() => setCrmNewPatientOpen(false)} className="text-sm font-semibold text-gray-500">Cancel</button>
+                    <button type="button" onClick={() => setCrmNewPatientOpen(false)} className="text-sm font-bold text-gray-500 hover:text-gray-900">Cancel</button>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <input value={crmNewPatientData.name} onChange={e => setCrmNewPatientData(prev => ({ ...prev, name: e.target.value }))} placeholder="Patient full name" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
-                    <input value={crmNewPatientData.phone} onChange={e => setCrmNewPatientData(prev => ({ ...prev, phone: e.target.value }))} placeholder="Phone number" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
-                    <input value={crmNewPatientData.condition} onChange={e => setCrmNewPatientData(prev => ({ ...prev, condition: e.target.value }))} placeholder="Condition / service" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
-                    <select value={crmNewPatientData.doctorId} onChange={e => setCrmNewPatientData(prev => ({ ...prev, doctorId: Number(e.target.value) }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white">
-                      {DOCTORS.map(doctor => <option key={doctor.id} value={doctor.id}>{doctor.name}</option>)}
-                    </select>
-                    <input type="date" value={crmNewPatientData.date} onChange={e => setCrmNewPatientData(prev => ({ ...prev, date: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
-                    <input type="time" value={crmNewPatientData.time} onChange={e => setCrmNewPatientData(prev => ({ ...prev, time: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Patient Full Name *</label>
+                      <input value={crmNewPatientData.name} onChange={e => setCrmNewPatientData(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g. Ama Darko" className="mt-1 w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-green-600/20 focus:border-green-600 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Phone Number *</label>
+                      <input value={crmNewPatientData.phone} onChange={e => setCrmNewPatientData(prev => ({ ...prev, phone: e.target.value }))} placeholder="+233 24 000 0000" className="mt-1 w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-green-600/20 focus:border-green-600 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Condition / Service *</label>
+                      <input value={crmNewPatientData.condition} onChange={e => setCrmNewPatientData(prev => ({ ...prev, condition: e.target.value }))} placeholder="e.g. Herbal Consultation" className="mt-1 w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-green-600/20 focus:border-green-600 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Assigned Doctor *</label>
+                      <select value={crmNewPatientData.doctorId} onChange={e => setCrmNewPatientData(prev => ({ ...prev, doctorId: Number(e.target.value) }))} className="mt-1 w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-green-600/20 focus:border-green-600 focus:outline-none">
+                        {DOCTORS.map(doctor => <option key={doctor.id} value={doctor.id} className="text-gray-900">{doctor.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Appointment Date *</label>
+                      <input type="date" value={crmNewPatientData.date} onChange={e => setCrmNewPatientData(prev => ({ ...prev, date: e.target.value }))} className="mt-1 w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-green-600/20 focus:border-green-600 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Appointment Time *</label>
+                      <input type="time" value={crmNewPatientData.time} onChange={e => setCrmNewPatientData(prev => ({ ...prev, time: e.target.value }))} className="mt-1 w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-900 bg-white focus:ring-2 focus:ring-green-600/20 focus:border-green-600 focus:outline-none" />
+                    </div>
                   </div>
-                  <div className="flex justify-end">
-                    <button onClick={handleCreateNewPatient} className="text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition-opacity" style={{ background:G }}>Save Patient & Book</button>
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={() => setCrmNewPatientOpen(false)} className="rounded-full border border-gray-300 bg-white px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button type="button" onClick={handleCreateNewPatient} className="text-white px-5 py-2 rounded-full text-sm font-bold shadow-sm hover:opacity-90 transition-opacity" style={{ background:G }}>Save Patient & Book</button>
                   </div>
                 </div>
               )}
@@ -3511,9 +3847,17 @@ export default function App() {
                 <div className="lg:col-span-3">
                   {selPatient ? (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                      <div className="p-5 text-white" style={{ background:G }}>
-                        <div className="flex items-center gap-4">
-                          <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold" style={{ background:OR }}>
+                      <div className="relative p-5 text-white" style={{ background:G }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelPatient(null)}
+                          className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors font-bold text-sm cursor-pointer shadow-xs"
+                          title="Close Patient Profile"
+                        >
+                          ✕
+                        </button>
+                        <div className="flex items-center gap-4 pr-10">
+                          <div className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold shrink-0 shadow-sm" style={{ background:OR }}>
                             {selPatient.name.split(" ").map(n=>n[0]).join("").slice(0,2)}
                           </div>
                           <div>
@@ -3539,15 +3883,17 @@ export default function App() {
                         ))}
                         <div className="flex gap-2 pt-2 flex-wrap">
                           <button
-                            onClick={() => handleAdminBookAppointment(selPatient)}
-                            className="flex-1 min-w-[140px] text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+                            type="button"
+                            onClick={() => openAdminBookAppointmentModal(selPatient)}
+                            className="flex-1 min-w-[140px] text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
                             style={{ background:G }}
                           >
                             Confirm Appointment
                           </button>
                           <button
+                            type="button"
                             onClick={() => openPatientWhatsApp(selPatient.phone, selPatient.name)}
-                            className="flex-1 min-w-[120px] text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+                            className="flex-1 min-w-[120px] text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
                             style={{ background:"#25D366" }}
                           >
                             WhatsApp
@@ -3795,7 +4141,7 @@ export default function App() {
                 <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex-1">
                   <p className="font-semibold text-gray-900 mb-4">Monthly Revenue (GHS)</p>
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={SALES_DATA} barSize={30}>
+                    <BarChart data={dynamicSalesData} barSize={30}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis dataKey="month" tick={{ fontSize:11, fill:"#9ca3af" }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize:11, fill:"#9ca3af" }} axisLine={false} tickLine={false} />
@@ -4139,25 +4485,24 @@ export default function App() {
               )}
               <div className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                 <div className="w-full overflow-x-auto">
-                <table className="w-full min-w-[520px] text-sm">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead className="text-xs uppercase tracking-wide text-gray-400" style={{ background:"#f9fafb" }}>
                     <tr>
-                      {["Item","In Stock","Min Level","Status"].map(h => (
+                      {["Item","Category","In Stock","Min Level","Status","Actions"].map(h => (
                         <th key={h} className="px-5 py-3 text-left">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {inventoryItems.map(item => {
-                      const isLow = item.stock < INVENTORY_SAFETY_THRESHOLD;
+                      const isLow = item.stock < (item.min || INVENTORY_SAFETY_THRESHOLD);
                       return (
                         <tr
                           key={item.item}
-                          role="button"
-                          onClick={() => openInventoryRestock(item.item)}
-                          className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          className="hover:bg-gray-50/80 transition-colors"
                         >
                           <td className="px-5 py-3 font-semibold text-gray-900">{item.item}</td>
+                          <td className="px-5 py-3 text-gray-500">{item.category || "General"}</td>
                           <td className="px-5 py-3 font-bold text-gray-900">{item.stock} {item.unit}</td>
                           <td className="px-5 py-3 text-gray-400">{item.min} {item.unit}</td>
                           <td className="whitespace-nowrap px-3 py-3 sm:px-5">
@@ -4165,6 +4510,16 @@ export default function App() {
                               style={ isLow ? { background:"#fee2e2", color:R } : { background:"#dcfce7", color:"#15803d" }}>
                               {isLow ? "Insufficient" : "Sufficient"}
                             </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <button
+                              type="button"
+                              onClick={() => openInventoryRestock(item.item, true)}
+                              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition shadow-xs"
+                              title="Edit Stock & Minimum Threshold"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-gray-500" /> Edit
+                            </button>
                           </td>
                         </tr>
                       );
@@ -4185,7 +4540,15 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2.5">
                   <button
                     type="button"
-                    onClick={() => setAnnouncementModalOpen(true)}
+                    onClick={() => {
+                      setAnnouncementFormData({
+                        title: "",
+                        message: "",
+                        date: new Date().toISOString().split("T")[0],
+                        time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+                      });
+                      setAnnouncementModalOpen(true);
+                    }}
                     className="flex items-center gap-2 text-white px-4 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition-opacity shadow-sm"
                     style={{ background:OR }}
                   >
@@ -4223,15 +4586,29 @@ export default function App() {
                     </p>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {staffAnnouncements.slice(0, 4).map((announcement) => (
-                      <div key={announcement.id} className="rounded-xl border border-amber-200/80 bg-white p-3.5 shadow-sm">
+                    {staffAnnouncements.slice(0, 6).map((announcement) => (
+                      <div key={announcement.id} className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-bold text-sm text-gray-900">{announcement.title}</h4>
-                          <span className="text-[10px] text-gray-400 shrink-0">{new Date(announcement.createdAt).toLocaleDateString()}</span>
+                          <h4 className="font-bold text-sm text-gray-900 leading-snug">{announcement.title}</h4>
+                          <div className="text-right shrink-0">
+                            <span className="text-[11px] font-semibold text-gray-700 block">
+                              {new Date(announcement.createdAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })}
+                            </span>
+                            <span className="text-[10px] text-gray-400 block font-medium">
+                              {new Date(announcement.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </div>
                         </div>
-                        <p className="mt-1 text-xs text-gray-600 leading-relaxed">{announcement.message}</p>
+                        <p className="mt-2 text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{announcement.message}</p>
                         {announcement.author && (
-                          <p className="mt-2 text-[10px] font-semibold text-amber-700">By: {announcement.author}</p>
+                          <div className="mt-3 flex items-center justify-between border-t border-amber-100/80 pt-2 text-[11px]">
+                            <p className="font-semibold text-amber-900 flex items-center gap-1">
+                              <span className="text-amber-600 font-bold">By:</span> {announcement.author}
+                            </p>
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full">
+                              Official Bulletin
+                            </span>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -4549,13 +4926,15 @@ export default function App() {
               {/* ── Post Announcement Modal ── */}
               {announcementModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-                  <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+                  <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150">
                     <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                       <div>
                         <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                           <Megaphone className="w-5 h-5 text-amber-600" /> Post Staff Announcement
                         </h3>
-                        <p className="text-xs text-gray-500">Broadcast updates to all staff members.</p>
+                        <p className="text-xs text-gray-500 font-medium">
+                          Posting as <span className="font-bold text-amber-800">{currentStaffUser?.name || "Dr. Edu Mohammed"}</span>
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -4574,17 +4953,27 @@ export default function App() {
                           return;
                         }
 
+                        let combinedIso = new Date().toISOString();
+                        if (announcementFormData.date) {
+                          const timePart = announcementFormData.time || "12:00";
+                          const parsed = new Date(`${announcementFormData.date}T${timePart}`);
+                          if (!isNaN(parsed.getTime())) {
+                            combinedIso = parsed.toISOString();
+                          }
+                        }
+
+                        const authorName = currentStaffUser?.name || "Dr. Edu Mohammed";
                         const newAnn: StaffAnnouncement = {
                           id: Date.now(),
                           title: announcementFormData.title.trim(),
                           message: announcementFormData.message.trim(),
-                          author: currentStaffUser?.name || "Management",
-                          createdAt: new Date().toISOString(),
+                          author: authorName,
+                          createdAt: combinedIso,
                         };
 
                         setStaffAnnouncements(prev => [newAnn, ...prev]);
                         setAnnouncementModalOpen(false);
-                        setAnnouncementFormData({ title: "", message: "" });
+                        setAnnouncementFormData({ title: "", message: "", date: "", time: "" });
 
                         try {
                           await StaffService.postAnnouncement(newAnn);
@@ -4600,9 +4989,32 @@ export default function App() {
                           required
                           value={announcementFormData.title}
                           onChange={e => setAnnouncementFormData(a => ({ ...a, title: e.target.value }))}
-                          placeholder="e.g. Schedule Update / All-Staff Meeting"
+                          placeholder="e.g. Monthly All-Staff Clinical Briefing"
                           className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
                         />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Date *</label>
+                          <input
+                            type="date"
+                            required
+                            value={announcementFormData.date}
+                            onChange={e => setAnnouncementFormData(a => ({ ...a, date: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Time *</label>
+                          <input
+                            type="time"
+                            required
+                            value={announcementFormData.time}
+                            onChange={e => setAnnouncementFormData(a => ({ ...a, time: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
+                          />
+                        </div>
                       </div>
 
                       <div>
@@ -4612,25 +5024,123 @@ export default function App() {
                           rows={4}
                           value={announcementFormData.message}
                           onChange={e => setAnnouncementFormData(a => ({ ...a, message: e.target.value }))}
-                          placeholder="Write the briefing message or announcement for clinic staff…"
+                          placeholder="Write the briefing message, schedule, or reminder for clinic staff…"
                           className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
                         />
                       </div>
 
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          type="submit"
-                          className="rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity"
-                          style={{ background:OR }}
-                        >
-                          Broadcast Announcement
-                        </button>
+                      <div className="flex gap-3 pt-2 justify-end">
                         <button
                           type="button"
                           onClick={() => setAnnouncementModalOpen(false)}
                           className="rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                          style={{ background:OR }}
+                        >
+                          Broadcast Announcement
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* ── CRM Confirm & Book Appointment Modal ── */}
+              {crmBookModalOpen && crmBookPatient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+                  <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-150">
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">Schedule & Confirm Appointment</h3>
+                        <p className="text-xs text-gray-500 font-medium">Book consultation slot for {crmBookPatient.name}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setCrmBookModalOpen(false); setCrmBookPatient(null); }}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3.5 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0" style={{ background:OR }}>
+                        {crmBookPatient.name.split(" ").map(n=>n[0]).join("").slice(0,2)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{crmBookPatient.name}</p>
+                        <p className="text-xs text-gray-600 font-medium">{crmBookPatient.phone} · Condition: {crmBookPatient.condition || "General Consultation"}</p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleAdminBookSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Assigned Doctor / Practitioner *</label>
+                          <select
+                            value={crmBookFormData.doctorId}
+                            onChange={e => setCrmBookFormData(prev => ({ ...prev, doctorId: Number(e.target.value) }))}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          >
+                            {DOCTORS.map(doctor => (
+                              <option key={doctor.id} value={doctor.id} className="text-gray-900">{doctor.name} ({doctor.specialty || "Herbal Specialist"})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Condition / Service *</label>
+                          <input
+                            required
+                            value={crmBookFormData.service}
+                            onChange={e => setCrmBookFormData(prev => ({ ...prev, service: e.target.value }))}
+                            placeholder="e.g. Herbal Consultation"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Appointment Date *</label>
+                          <input
+                            type="date"
+                            required
+                            value={crmBookFormData.date}
+                            onChange={e => setCrmBookFormData(prev => ({ ...prev, date: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Appointment Time *</label>
+                          <input
+                            type="time"
+                            required
+                            value={crmBookFormData.time}
+                            onChange={e => setCrmBookFormData(prev => ({ ...prev, time: e.target.value }))}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-green-600 focus:ring-2 focus:ring-green-600/20 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => { setCrmBookModalOpen(false); setCrmBookPatient(null); }}
+                          className="rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
+                          style={{ background:G }}
+                        >
+                          Confirm & Save Appointment
                         </button>
                       </div>
                     </form>
@@ -5553,28 +6063,38 @@ export default function App() {
       <div className="fixed bottom-4 right-4 z-50">
         {chatOpen ? (
           chatAuthenticated ? (
-          <div className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden" style={{ height:420 }}>
+          <div className="w-[calc(100vw-32px)] sm:w-88 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden transition-all" style={{ height:460 }}>
             {/* Header */}
-            <div className="px-4 py-3 flex items-center justify-between" style={{ background:G }}>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background:OR }}>
-                  <Bot className="w-4 h-4 text-white" />
+            <div className="px-4 py-3 flex items-center justify-between shadow-xs" style={{ background:G }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-xs" style={{ background:OR }}>
+                  <Bot className="w-4.5 h-4.5 text-white" />
                 </div>
                 <div>
-                  <p className="text-white text-sm font-bold">EduBot</p>
-                  <p className="text-green-200 text-xs flex items-center gap-1">
+                  <p className="text-white text-sm font-bold tracking-tight">EduBot Assistant</p>
+                  <p className="text-green-200 text-[11px] flex items-center gap-1.5 font-medium">
                     <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background:"#4ade80", display:"inline-block" }} /> Online 24/7
                   </p>
                 </div>
               </div>
-              <button onClick={() => setChatOpen(false)} className="text-green-200 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+              <button 
+                onClick={() => setChatOpen(false)} 
+                className="text-green-200 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+                aria-label="Close chat"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ background:"#f9fafb" }}>
+            <div 
+              ref={chatMessagesContainerRef}
+              className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 overscroll-contain scroll-smooth" 
+              style={{ background:"#f9fafb" }}
+            >
               {chatMessages.map((m,i) => (
                 <div key={i} className={`flex ${m.role==="user" ? "justify-end" : "justify-start"}`}>
-                  <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed"
+                  <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-xs"
                     style={ m.role==="user"
                       ? { background:G, color:W, borderBottomRightRadius:4 }
                       : { background:W, color:"#111827", borderBottomLeftRadius:4, border:"1px solid #e5e7eb" }
@@ -5583,15 +6103,23 @@ export default function App() {
                   </div>
                 </div>
               ))}
-              <div ref={chatEndRef} />
+              <div ref={chatEndRef} className="h-1 w-full shrink-0" />
             </div>
 
             {/* Input */}
-            <div className="p-3 bg-white border-t border-gray-100 flex gap-2">
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key==="Enter"&&sendChat()}
+            <div className="p-3 bg-white border-t border-gray-100 flex items-center gap-2">
+              <input 
+                value={chatInput} 
+                onChange={e => setChatInput(e.target.value)} 
+                onKeyDown={e => e.key==="Enter" && sendChat()}
                 placeholder="Ask me anything…"
-                className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus:outline-none" />
-              <button onClick={sendChat} className="w-9 h-9 rounded-xl text-white flex items-center justify-center hover:opacity-90 transition-opacity flex-shrink-0" style={{ background:G }}>
+                className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-green-600 focus:bg-white transition-colors" 
+              />
+              <button 
+                onClick={sendChat} 
+                className="w-10 h-10 rounded-xl text-white flex items-center justify-center hover:opacity-90 transition-opacity flex-shrink-0 cursor-pointer shadow-xs" 
+                style={{ background:G }}
+              >
                 <Send className="w-4 h-4" />
               </button>
             </div>
