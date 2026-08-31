@@ -3365,19 +3365,6 @@ export default function App() {
                 {adminAuthLoading ? "Please wait..." : adminMode === "login" ? "Sign In" : adminMode === "signup" ? "Create Account" : "Reset Password"}
               </button>
 
-              {adminMode === "login" ? (
-                <button
-                  type="button"
-                  onClick={handleAdminReset}
-                  className="w-full text-center text-xs font-bold tracking-wide text-black underline-offset-4 hover:underline"
-                >
-                  Reset password using email
-                </button>
-              ) : null}
-            </div>
-
-            <div className="mt-6 text-center text-xs leading-5 text-black/60">
-              Use your registered email and phone number to access the admin portal.
             </div>
           </div>
         </div>
