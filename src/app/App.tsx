@@ -5288,29 +5288,6 @@ export default function App() {
 
   return (
     <>
-      {isDarkMode && (
-        <style>{`
-          .dark .text-gray-900,
-          .dark .text-gray-800,
-          .dark .text-gray-700,
-          .dark .text-gray-600,
-          .dark .text-gray-500,
-          .dark .text-gray-400,
-          .dark .text-gray-300,
-          .dark .text-gray-200,
-          .dark .text-gray-100 {
-            color: #ffffff !important;
-          }
-          .dark .text-slate-400,
-          .dark .text-slate-500,
-          .dark .text-slate-600,
-          .dark .text-slate-700,
-          .dark .text-slate-800 {
-            color: rgba(255,255,255,0.9) !important;
-          }
-        `}</style>
-      )}
-
       <div className={`min-h-screen overflow-x-hidden ${isDarkMode ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900"}`}>
 
       {/* ─ Topbar ─────────────────────────────────────────────────────── */}
@@ -5323,7 +5300,7 @@ export default function App() {
       </div>
 
       {/* ─ Nav ─────────────────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 border-b border-gray-200/80 bg-white/95 shadow-[0_8px_24px_rgba(15,23,42,0.18)] backdrop-blur sm:static">
+      <nav className={`sticky top-0 z-50 border-b shadow-[0_8px_24px_rgba(15,23,42,0.18)] backdrop-blur sm:static ${isDarkMode ? "border-slate-800 bg-slate-950/95" : "border-gray-200/80 bg-white/95"}`}>
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-2 sm:h-20 sm:px-6 lg:px-8">
           {/* Brand */}
           <button
@@ -5341,7 +5318,7 @@ export default function App() {
               const homeSection = document.getElementById("home");
               homeSection?.scrollIntoView({ behavior: "smooth", block: "start" });
             }}
-            className="flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50/70 px-2 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:gap-3 sm:px-3 sm:py-2"
+            className={`flex items-center gap-2 rounded-full border px-2 py-1.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:gap-3 sm:px-3 sm:py-2 ${isDarkMode ? "border-emerald-950 bg-emerald-950/40" : "border-emerald-100 bg-emerald-50/70"}`}
           >
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white p-1 shadow-sm ring-2 ring-emerald-100 sm:h-12 sm:w-12">
               <ImageWithFallback src={clinicLogo} alt="Edu Herbal Clinic logo"
@@ -5355,9 +5332,9 @@ export default function App() {
           </button>
 
           {/* Links */}
-          <div className="hidden lg:flex items-center gap-6 rounded-full border border-gray-100 bg-gray-50/80 px-5 py-2 text-sm font-semibold text-gray-600 shadow-sm">
+          <div className={`hidden lg:flex items-center gap-6 rounded-full border px-5 py-2 text-sm font-semibold shadow-sm ${isDarkMode ? "border-slate-800 bg-slate-900 text-slate-300" : "border-gray-100 bg-gray-50/80 text-gray-600"}`}>
             {[["#services","Services"],["#book","Book Now"],["#products","Products"],["#blog","Blog"],["#faq","FAQ"],["#contact","Contact"]].map(([href,lbl]) => (
-              <a key={href} href={href} className="transition-colors hover:text-[#1C7A3A]">{lbl}</a>
+              <a key={href} href={href} className={`transition-colors ${isDarkMode ? "text-slate-300 hover:text-emerald-400" : "hover:text-[#1C7A3A]"}`}>{lbl}</a>
             ))}
           </div>
 
@@ -5372,7 +5349,7 @@ export default function App() {
           </div>
 
           <button className="lg:hidden p-1.5" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}>
-            {menuOpen ? <X className="h-5 w-5 text-gray-700 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 text-gray-700 sm:h-6 sm:w-6" />}
+            {menuOpen ? <X className={`h-5 w-5 sm:h-6 sm:w-6 ${isDarkMode ? "text-slate-100" : "text-gray-700"}`} /> : <Menu className={`h-5 w-5 sm:h-6 sm:w-6 ${isDarkMode ? "text-slate-100" : "text-gray-700"}`} />}
           </button>
         </div>
 
@@ -5659,7 +5636,7 @@ export default function App() {
 
               <div className="flex gap-3 mt-6">
                 {bookingStep > 0 && (
-                  <button onClick={() => setBookingStep(s => s-1)} className="px-5 py-3 rounded-full border-2 border-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-50 transition-colors">
+                  <button onClick={() => setBookingStep(s => s-1)} className={`px-5 py-3 rounded-full border-2 text-sm font-bold transition-colors ${isDarkMode ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
                     Back
                   </button>
                 )}
@@ -5790,8 +5767,8 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mx-auto max-w-5xl overflow-hidden rounded-[2rem] border border-gray-200 bg-white p-3 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.25)]">
-            <div className="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-gradient-to-br from-white via-green-50/70 to-orange-50/60">
+          <div className={`mx-auto max-w-5xl overflow-hidden rounded-[2rem] border p-3 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.25)] ${isDarkMode ? "border-slate-800 bg-slate-900" : "border-gray-200 bg-white"}`}>
+            <div className={`overflow-hidden rounded-[1.5rem] border ${isDarkMode ? "border-slate-800 bg-gradient-to-br from-slate-900 via-slate-800/80 to-slate-900" : "border-gray-100 bg-gradient-to-br from-white via-green-50/70 to-orange-50/60"}`}>
               <div
                 className="flex transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={{ transform: `translateX(-${blogIndex * 100}%)` }}
@@ -5809,15 +5786,15 @@ export default function App() {
                       </span>
                     </div>
                     <div className="flex flex-col justify-center p-8 sm:p-10">
-                      <div className="inline-flex w-fit items-center rounded-full border border-green-200 bg-green-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em]" style={{ color:G }}>
+                      <div className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] ${isDarkMode ? "border-green-800 bg-green-950/60 text-green-300" : "border-green-200 bg-green-50 text-green-700"}`} style={!isDarkMode ? { color:G } : {}}>
                         Next update
                       </div>
                       <h3 className={`mt-4 font-display text-2xl sm:text-3xl ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{b.title}</h3>
                       <div className={`mt-3 flex items-center gap-2 text-xs ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>
                         <span>{b.date}</span><span>·</span><span>{b.readTime} read</span>
                       </div>
-                      <p className={`mt-4 text-sm leading-relaxed ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>{b.excerpt}</p>
-                      <div className="mt-6 inline-flex items-center gap-2 text-sm font-bold" style={{ color:G }}>
+                      <p className={`mt-4 text-sm leading-relaxed ${isDarkMode ? "text-slate-300" : "text-gray-600"}`}>{b.excerpt}</p>
+                      <div className="mt-6 inline-flex items-center gap-2 text-sm font-bold cursor-pointer" style={{ color: isDarkMode ? "#4ade80" : G }}>
                         Explore article <ArrowRight className="w-4 h-4" />
                       </div>
                     </div>
@@ -5844,7 +5821,7 @@ export default function App() {
             <p className={`mt-4 max-w-2xl mx-auto ${isDarkMode ? "text-slate-400" : "text-gray-600"}`}>A polished showcase of the recognition, professionalism and trusted care that define Edu Herbal Clinic.</p>
           </div>
 
-          <div className="rounded-[2rem] border border-gray-200 shadow-xl bg-gray-50 p-3 sm:p-4">
+          <div className={`rounded-[2rem] border shadow-xl p-3 sm:p-4 ${isDarkMode ? "border-slate-800 bg-slate-900" : "border-gray-200 bg-gray-50"}`}>
             <div className="overflow-hidden rounded-[1.5rem]">
               <div
                 className="flex transition-transform duration-700 ease-out"
@@ -5852,7 +5829,7 @@ export default function App() {
               >
                 {[...AWARD_GALLERY, ...AWARD_GALLERY].map((item, index) => (
                   <div key={`${item.title}-${index}`} className="shrink-0 px-2" style={{ width: `${100 / slidesPerView}%` }}>
-                    <div className="group relative h-64 overflow-hidden rounded-[1.2rem] border border-gray-200 bg-white shadow-sm">
+                    <div className={`group relative h-64 overflow-hidden rounded-[1.2rem] border shadow-sm ${isDarkMode ? "border-slate-850 bg-slate-950" : "border-gray-200 bg-white"}`}>
                       <ImageWithFallback
                         src={item.src}
                         alt={item.title}
@@ -5920,14 +5897,14 @@ export default function App() {
           <div className="grid lg:grid-cols-5 gap-6">
             <div className="lg:col-span-2 space-y-3">
               {/* WhatsApp */}
-              <a href="https://wa.me/2330558379545" className="w-full text-white rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 transition-opacity" style={{ background:"#25D366" }}>
+              <a href="https://wa.me/2330558379545" className="w-full text-white rounded-2xl p-5 flex items-center gap-4 hover:opacity-90 transition-opacity shadow-sm" style={{ background:"#25D366" }}>
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background:"rgba(255,255,255,0.2)" }}>
                   <MessageCircle className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <p className="font-bold text-lg">WhatsApp Chat</p>
+                  <p className="font-bold text-lg text-white">WhatsApp Chat</p>
                   <p className="text-green-100 text-xs">Instant reply from our team</p>
-                  <p className="font-bold mt-0.5">+233 055 837 9545</p>
+                  <p className="font-bold mt-0.5 text-white">+233 055 837 9545</p>
                 </div>
               </a>
 
@@ -5938,13 +5915,13 @@ export default function App() {
                 { icon:MapPin,label:"Address",         value:"Odorkor Official Town & Mankessim - Bafikrom", color:R },
                 { icon:Clock, label:"Opening Hours",   value:"Mon–Fri 8AM–6PM · Sat 9AM–3PM", color:G },
               ].map(item => (
-                <div key={item.label} className="bg-gray-50 rounded-xl px-5 py-4 border border-gray-100 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:`${item.color}15` }}>
+                <div key={item.label} className={`rounded-xl px-5 py-4 border flex items-center gap-3 ${isDarkMode ? "border-slate-800 bg-slate-900" : "bg-gray-50 border-gray-100"}`}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background:`${item.color}18` }}>
                     <item.icon className="w-4 h-4" style={{ color:item.color }} />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-400">{item.label}</p>
-                    <p className="font-semibold text-gray-900 text-sm">{item.value}</p>
+                    <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-gray-400"}`}>{item.label}</p>
+                    <p className={`font-semibold text-sm ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{item.value}</p>
                   </div>
                 </div>
               ))}
@@ -5953,18 +5930,18 @@ export default function App() {
             {/* Locations */}
             <div className="lg:col-span-3 grid gap-4 md:grid-cols-2">
               {locationCards.map((location) => (
-                <div key={location.title} className="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-[0_16px_45px_rgba(0,0,0,0.08)] flex flex-col gap-4">
+                <div key={location.title} className={`rounded-[1.5rem] border p-5 shadow-[0_16px_45px_rgba(0,0,0,0.08)] flex flex-col gap-4 ${isDarkMode ? "border-slate-800 bg-slate-900" : "border-gray-100 bg-white"}`}>
                   <div className="flex items-center gap-3">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-sm" style={{ background: `${location.accent}15` }}>
                       <MapPin className="h-5 w-5" style={{ color: location.accent }} />
                     </div>
                     <div>
-                      <p className="font-bold text-gray-900">{location.title}</p>
-                      <p className="text-sm text-gray-500">{location.subtitle}</p>
+                      <p className={`font-bold ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{location.title}</p>
+                      <p className={`text-sm ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>{location.subtitle}</p>
                     </div>
                   </div>
-                  <div className="rounded-[1rem] border border-gray-100 bg-gray-50 p-3">
-                    <div className="overflow-hidden rounded-[0.9rem] border border-gray-100">
+                  <div className={`rounded-[1rem] border p-3 ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-gray-50"}`}>
+                    <div className={`overflow-hidden rounded-[0.9rem] border ${isDarkMode ? "border-slate-800" : "border-gray-100"}`}>
                       <iframe
                         title={`${location.title} map preview`}
                         src={location.embedUrl}
@@ -5973,7 +5950,7 @@ export default function App() {
                         referrerPolicy="no-referrer-when-downgrade"
                       />
                     </div>
-                    <p className="mt-3 text-sm font-semibold text-gray-700">{location.address}</p>
+                    <p className={`mt-3 text-sm font-semibold ${isDarkMode ? "text-slate-300" : "text-gray-700"}`}>{location.address}</p>
                   </div>
                   <button type="button" onClick={() => { setActiveMapLocation(location); setMapModalOpen(true); }} className="mt-auto inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity" style={{ background: location.accent }}>
                     {location.buttonLabel} <ArrowRight className="h-4 w-4" />
@@ -5987,19 +5964,19 @@ export default function App() {
 
       {mapModalOpen && activeMapLocation && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-3 py-4 sm:px-6" onClick={() => { setMapModalOpen(false); setActiveMapLocation(null); }}>
-          <div className="w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/30 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
+          <div className={`w-full max-w-4xl overflow-hidden rounded-[2rem] border shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-slate-100" : "border-white/30 bg-white text-gray-900"}`} onClick={(event) => event.stopPropagation()}>
+            <div className={`flex items-start justify-between gap-3 border-b px-5 py-4 sm:px-6 ${isDarkMode ? "border-slate-800" : "border-gray-100"}`}>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.3em]" style={{ color: OR }}>Directions</p>
-                <h3 className="mt-1 font-display text-xl font-semibold text-gray-900">{activeMapLocation.title}</h3>
-                <p className="mt-1 text-sm text-gray-500">{activeMapLocation.address}</p>
+                <h3 className={`mt-1 font-display text-xl font-semibold ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{activeMapLocation.title}</h3>
+                <p className={`mt-1 text-sm ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>{activeMapLocation.address}</p>
               </div>
-              <button type="button" onClick={() => { setMapModalOpen(false); setActiveMapLocation(null); }} className="rounded-full border border-gray-200 bg-white p-2 text-gray-600 shadow-sm transition-all hover:bg-gray-50">
+              <button type="button" onClick={() => { setMapModalOpen(false); setActiveMapLocation(null); }} className={`rounded-full border p-2 shadow-sm transition-all ${isDarkMode ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}>
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="p-4 sm:p-6">
-              <div className="overflow-hidden rounded-[1.25rem] border border-gray-100">
+              <div className={`overflow-hidden rounded-[1.25rem] border ${isDarkMode ? "border-slate-800" : "border-gray-100"}`}>
                 <iframe
                   title={`${activeMapLocation.title} location map`}
                   src={activeMapLocation.embedUrl}
@@ -6008,9 +5985,9 @@ export default function App() {
                   referrerPolicy="no-referrer-when-downgrade"
                 />
               </div>
-              <div className="mt-4 rounded-[1.1rem] border border-gray-100 bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-900">{activeMapLocation.address}</p>
-                <p className="mt-1 text-sm leading-relaxed text-gray-500">{activeMapLocation.desc}</p>
+              <div className={`mt-4 rounded-[1.1rem] border p-4 ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-gray-50"}`}>
+                <p className={`text-sm font-semibold ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{activeMapLocation.address}</p>
+                <p className={`mt-1 text-sm leading-relaxed ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>{activeMapLocation.desc}</p>
               </div>
             </div>
           </div>
@@ -6048,7 +6025,7 @@ export default function App() {
                   imageStyle: { objectPosition: 'center 20%' },
                 },
               ].map((card) => (
-                <div key={card.title} className="overflow-hidden rounded-[1.45rem] border border-white/40 bg-white/95 shadow-[0_20px_55px_rgba(0,0,0,0.16)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_26px_70px_rgba(0,0,0,0.22)]">
+                <div key={card.title} className={`overflow-hidden rounded-[1.45rem] border shadow-[0_20px_55px_rgba(0,0,0,0.16)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_26px_70px_rgba(0,0,0,0.22)] ${isDarkMode ? "border-slate-800 bg-slate-900/95 text-slate-100" : "border-white/40 bg-white/95 text-gray-900"}`}>
                   <div className="relative mx-3 mt-3 h-56 overflow-hidden rounded-[1.15rem] sm:h-64">
                     <ImageWithFallback
                       src={card.image}
@@ -6060,8 +6037,8 @@ export default function App() {
                     <div className="absolute inset-x-0 bottom-0 h-20 rounded-b-[1.15rem] bg-gradient-to-t from-black/20 to-transparent" />
                   </div>
                   <div className="px-4 pb-4 pt-3 text-center">
-                    <h4 className="font-display text-base font-semibold text-gray-900">{card.title}</h4>
-                    <p className="mt-1.5 text-xs leading-relaxed text-gray-600">{card.desc}</p>
+                    <h4 className={`font-display text-base font-semibold ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{card.title}</h4>
+                    <p className={`mt-1.5 text-xs leading-relaxed ${isDarkMode ? "text-slate-300" : "text-gray-600"}`}>{card.desc}</p>
                   </div>
                 </div>
               ))}
@@ -6190,7 +6167,7 @@ export default function App() {
       <div className="fixed bottom-4 right-4 z-50">
         {chatOpen ? (
           chatAuthenticated ? (
-          <div className="w-[calc(100vw-32px)] sm:w-88 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden transition-all" style={{ height:460 }}>
+          <div className={`w-[calc(100vw-32px)] sm:w-88 max-w-sm rounded-3xl shadow-2xl border flex flex-col overflow-hidden transition-all ${isDarkMode ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-gray-100 text-gray-900"}`} style={{ height:460 }}>
             {/* Header */}
             <div className="px-4 py-3 flex items-center justify-between shadow-xs" style={{ background:G }}>
               <div className="flex items-center gap-2.5">
@@ -6217,14 +6194,14 @@ export default function App() {
             <div 
               ref={chatMessagesContainerRef}
               className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 overscroll-contain scroll-smooth" 
-              style={{ background:"#f9fafb" }}
+              style={{ background: isDarkMode ? "#0f172a" : "#f9fafb" }}
             >
               {chatMessages.map((m,i) => (
                 <div key={i} className={`flex ${m.role==="user" ? "justify-end" : "justify-start"}`}>
                   <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-xs"
                     style={ m.role==="user"
                       ? { background:G, color:W, borderBottomRightRadius:4 }
-                      : { background:W, color:"#111827", borderBottomLeftRadius:4, border:"1px solid #e5e7eb" }
+                      : { background: isDarkMode ? "#1e293b" : W, color: isDarkMode ? "#f1f5f9" : "#111827", borderBottomLeftRadius:4, border: isDarkMode ? "1px solid #334155" : "1px solid #e5e7eb" }
                     }>
                     {m.text}
                   </div>
@@ -6234,13 +6211,13 @@ export default function App() {
             </div>
 
             {/* Input */}
-            <div className="p-3 bg-white border-t border-gray-100 flex items-center gap-2">
+            <div className={`p-3 border-t flex items-center gap-2 ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-gray-100"}`}>
               <input 
                 value={chatInput} 
                 onChange={e => setChatInput(e.target.value)} 
                 onKeyDown={e => e.key==="Enter" && sendChat()}
                 placeholder="Ask me anything…"
-                className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-green-600 focus:bg-white transition-colors" 
+                className={`flex-1 text-sm rounded-xl px-3.5 py-2.5 focus:outline-none transition-colors ${isDarkMode ? "bg-slate-800 border border-slate-700 text-slate-100 placeholder:text-slate-500 focus:border-green-500" : "bg-gray-50 border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-green-600 focus:bg-white"}`}
               />
               <button 
                 onClick={sendChat} 
@@ -6252,13 +6229,13 @@ export default function App() {
             </div>
           </div>
           ) : (
-            <div className="w-80 rounded-2xl border border-gray-100 bg-white p-5 text-gray-900 shadow-2xl">
+            <div className={`w-80 rounded-2xl border p-5 shadow-2xl ${isDarkMode ? "border-slate-800 bg-slate-900 text-slate-100" : "border-gray-100 bg-white text-gray-900"}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-bold">Start a private chat</p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-500">Enter your full name and phone number so we can identify your conversation.</p>
+                  <p className={`font-bold ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>Start a private chat</p>
+                  <p className={`mt-1 text-xs leading-relaxed ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>Enter your full name and phone number so we can identify your conversation.</p>
                 </div>
-                <button type="button" onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-700" aria-label="Close chat"><X className="h-4 w-4" /></button>
+                <button type="button" onClick={() => setChatOpen(false)} className={`${isDarkMode ? "text-slate-400 hover:text-slate-200" : "text-gray-400 hover:text-gray-700"}`} aria-label="Close chat"><X className="h-4 w-4" /></button>
               </div>
               <input
                 value={chatPatientName}
@@ -6266,7 +6243,7 @@ export default function App() {
                 onKeyDown={event => event.key === "Enter" && authenticateChatPhone()}
                 autoComplete="name"
                 placeholder="Full name"
-                className="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-600"
+                className={`mt-4 w-full rounded-xl border px-3 py-2.5 text-sm outline-none ${isDarkMode ? "border-slate-700 bg-slate-800 text-slate-100 placeholder:text-slate-500 focus:border-green-500" : "border-gray-200 bg-white text-gray-900 focus:border-green-600"}`}
               />
               <input
                 value={chatPhoneInput}
@@ -6274,10 +6251,10 @@ export default function App() {
                 onKeyDown={event => event.key === "Enter" && authenticateChatPhone()}
                 inputMode="tel"
                 placeholder="0241234567"
-                className="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-green-600"
+                className={`mt-4 w-full rounded-xl border px-3 py-2.5 text-sm outline-none ${isDarkMode ? "border-slate-700 bg-slate-800 text-slate-100 placeholder:text-slate-500 focus:border-green-500" : "border-gray-200 bg-white text-gray-900 focus:border-green-600"}`}
               />
-              {chatAuthError && <p className="mt-2 text-xs font-semibold text-red-600">{chatAuthError}</p>}
-              <button type="button" onClick={authenticateChatPhone} className="mt-3 w-full rounded-xl px-4 py-2.5 text-sm font-bold text-white" style={{ background:G }}>
+              {chatAuthError && <p className="mt-2 text-xs font-semibold text-red-500">{chatAuthError}</p>}
+              <button type="button" onClick={authenticateChatPhone} className="mt-3 w-full rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity" style={{ background:G }}>
                 Continue securely
               </button>
             </div>
