@@ -6,7 +6,8 @@ import {
   ArrowRight, Menu, X, LogIn, PhoneCall, PhoneMissed, PhoneForwarded,
   Send, Plus, Mail, Shield, ChevronRight, Bot, LogOut,
   Inbox, Microscope, Moon, Sun, Trash2, Megaphone, Pencil,
-  FlaskConical, Footprints, BedDouble, Ambulance, Home, UserCheck
+  FlaskConical, Footprints, BedDouble, Ambulance, Home, UserCheck,
+  Eye, EyeOff
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
@@ -777,6 +778,8 @@ export default function App() {
   const [adminConfirmPassword, setAdminConfirmPassword] = useState("");
   const [adminResetPassword, setAdminResetPassword] = useState("");
   const [adminResetConfirmPassword, setAdminResetConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [adminLoginError, setAdminLoginError] = useState("");
   const [mapModalOpen, setMapModalOpen] = useState(false);
   const [activeMapLocation, setActiveMapLocation] = useState<{ title:string; subtitle:string; address:string; desc:string; buttonLabel:string; accent:string; embedUrl:string } | null>(null);
@@ -3202,48 +3205,88 @@ export default function App() {
                 <>
                   <div>
                     <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">New Password</label>
-                    <input
-                      type="password"
-                      value={adminResetPassword}
-                      onChange={(e) => setAdminResetPassword(e.target.value)}
-                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
-                      placeholder="Enter new password"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={adminResetPassword}
+                        onChange={(e) => setAdminResetPassword(e.target.value)}
+                        className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                        placeholder="Enter new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-black/60 hover:text-black focus:outline-none"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Confirm New Password</label>
-                    <input
-                      type="password"
-                      value={adminResetConfirmPassword}
-                      onChange={(e) => setAdminResetConfirmPassword(e.target.value)}
-                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
-                      placeholder="Re-enter new password"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={adminResetConfirmPassword}
+                        onChange={(e) => setAdminResetConfirmPassword(e.target.value)}
+                        className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                        placeholder="Re-enter new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-black/60 hover:text-black focus:outline-none"
+                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Password</label>
-                  <input
-                    type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
-                    placeholder="Enter password"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                      placeholder="Enter password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-black/60 hover:text-black focus:outline-none"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 
               {adminMode === "signup" ? (
                 <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Confirm Password</label>
-                  <input
-                    type="password"
-                    value={adminConfirmPassword}
-                    onChange={(e) => setAdminConfirmPassword(e.target.value)}
-                    className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
-                    placeholder="Re-enter password"
-                  />
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Confirm Password</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={adminConfirmPassword}
+                      onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                      placeholder="Re-enter password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-black/60 hover:text-black focus:outline-none"
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
@@ -4538,11 +4581,11 @@ export default function App() {
                           <td className="px-5 py-3">
                             <button
                               type="button"
-                              onClick={() => openInventoryRestock(item.item, true)}
+                              onClick={() => openInventoryRestock(item.item, false)}
                               className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition shadow-xs"
-                              title="Edit Stock & Minimum Threshold"
+                              title="Add Stock"
                             >
-                              <Pencil className="w-3.5 h-3.5 text-gray-500" /> Edit
+                              <Plus className="w-3.5 h-3.5 text-gray-500" /> Add
                             </button>
                           </td>
                         </tr>
