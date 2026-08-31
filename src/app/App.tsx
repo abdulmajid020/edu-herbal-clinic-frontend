@@ -2069,12 +2069,13 @@ export default function App() {
     if (!date || !time) return;
 
     const assignedDoctor = DOCTORS.find(d => d.id === Number(doctorId)) ?? DOCTORS[0];
+    const isFollowUp = /follow[- ]?up/i.test(service || crmBookPatient.condition || "");
     const updatedPatient = {
       ...crmBookPatient,
       nextAppt: `${date} · ${time}`,
       doctor: assignedDoctor.name,
       condition: service || crmBookPatient.condition,
-      status: "Active",
+      status: isFollowUp ? "Follow-up" : "Active",
     } as PatientEntry;
 
     try {
@@ -2093,7 +2094,7 @@ export default function App() {
         await PatientService.updatePatient(crmBookPatient.id, {
           nextAppt: `${date} · ${time}`,
           condition: service || crmBookPatient.condition,
-          status: "Active",
+          status: isFollowUp ? "Follow-up" : "Active",
         }).catch(() => null);
       }
     } catch (apiErr) {
@@ -2111,7 +2112,7 @@ export default function App() {
       doctor: assignedDoctor.name,
       date,
       time,
-      status: "Confirmed",
+      status: "Pending",
     });
     sendAppointmentSms({
       fullName: crmBookPatient.name,
@@ -2121,7 +2122,7 @@ export default function App() {
       date,
       time,
     });
-    setBookingSmsStatus("Appointment booked for the patient and confirmation SMS prepared.");
+    setBookingSmsStatus("Appointment booked and waiting for confirmation.");
     setCrmBookModalOpen(false);
     setCrmBookPatient(null);
   };
@@ -2147,15 +2148,17 @@ export default function App() {
       console.warn("[CRM PATIENT API] Recorded locally with fallback:", apiErr);
     }
 
+    const isFollowUp = /follow[- ]?up/i.test(crmNewPatientData.condition || "");
+    const targetStatus = isFollowUp ? "Follow-up" : "Pending";
     const newPatient: PatientEntry = {
       id: Date.now(),
       name: crmNewPatientData.name.trim(),
       phone: crmNewPatientData.phone.trim(),
       condition: crmNewPatientData.condition.trim(),
-      lastVisit: "Just added",
+      lastVisit: isFollowUp ? "Follow-up scheduled" : "Just added",
       nextAppt: `${crmNewPatientData.date} · ${crmNewPatientData.time}`,
       doctor: selectedDoctor.name,
-      status: "Active",
+      status: targetStatus,
       balance: 0,
       products: [crmNewPatientData.condition.trim()],
     };
@@ -2169,7 +2172,7 @@ export default function App() {
       doctor: selectedDoctor.name,
       date: crmNewPatientData.date,
       time: crmNewPatientData.time,
-      status: "Confirmed",
+      status: "Pending",
     });
     sendAppointmentSms({
       fullName: newPatient.name,
@@ -2179,9 +2182,57 @@ export default function App() {
       date: crmNewPatientData.date,
       time: crmNewPatientData.time,
     });
-    setBookingSmsStatus("New patient created and appointment confirmation SMS prepared.");
+    setBookingSmsStatus(isFollowUp ? "Follow-up scheduled and added to Follow-up section." : "New patient registered in Pending section awaiting confirmation.");
     setCrmNewPatientData({ name:"", phone:"", condition:"", doctorId: DOCTORS[0].id, date:"", time:"" });
     setCrmNewPatientOpen(false);
+  };
+
+  const confirmAppointmentStatus = async (appointmentId: number) => {
+    const targetAppt = patientAppointments.find(a => a.id === appointmentId);
+    setPatientAppointments(prev => prev.map(a => a.id === appointmentId ? { ...a, status: "Confirmed" } : a));
+
+    if (targetAppt) {
+      setCrmPatients(prev => prev.map(p => {
+        const matches = (p.phone && targetAppt.phone && p.phone === targetAppt.phone) ||
+                        (p.name.toLowerCase() === targetAppt.patientName.toLowerCase());
+        if (matches && p.status === "Pending") {
+          if (selPatient?.id === p.id) {
+            setSelPatient({ ...p, status: "Active" });
+          }
+          if (p.id && typeof p.id === "number") {
+            PatientService.updatePatient(p.id, { status: "Active" }).catch(() => null);
+          }
+          return { ...p, status: "Active" };
+        }
+        return p;
+      }));
+    }
+
+    try {
+      await AppointmentService.updateStatus(appointmentId, "Confirmed");
+      setBookingSmsStatus("Appointment confirmed and patient moved to Active section.");
+    } catch (err) {
+      console.warn("[CONFIRM APPT API ERROR]", err);
+    }
+  };
+
+  const activatePendingPatient = async (patient: PatientEntry) => {
+    const updated = { ...patient, status: "Active" as const };
+    setCrmPatients(prev => prev.map(p => p.id === patient.id ? updated : p));
+    setSelPatient(updated);
+    setPatientAppointments(prev => prev.map(a => {
+      const matches = (a.phone && patient.phone && a.phone === patient.phone) ||
+                      (a.patientName.toLowerCase() === patient.name.toLowerCase());
+      return matches && a.status === "Pending" ? { ...a, status: "Confirmed" } : a;
+    }));
+    try {
+      if (patient.id && typeof patient.id === "number") {
+        await PatientService.updatePatient(patient.id, { status: "Active" }).catch(() => null);
+      }
+      setBookingSmsStatus(`${patient.name} confirmed and moved to Active section.`);
+    } catch (err) {
+      console.warn("[ACTIVATE PATIENT API ERROR]", err);
+    }
   };
 
   const advanceBooking = async () => {
@@ -2194,6 +2245,7 @@ export default function App() {
     const confirmedBooking = { ...booking };
     const selectedDoctor = DOCTORS.find(d => d.id === booking.doctorId) ?? DOCTORS[0];
     const isTelemedicine = /telemedicine|video/i.test(confirmedBooking.service || "");
+    const isFollowUp = /follow[- ]?up/i.test(confirmedBooking.service || "");
 
     // 1. Call Backend API
     try {
@@ -2231,18 +2283,19 @@ export default function App() {
             note: `Telemedicine request received for ${confirmedBooking.service}. Preferred slot: ${confirmedBooking.date} at ${confirmedBooking.time}. ${confirmedBooking.notes ? `Note: ${confirmedBooking.notes}` : ""}`.trim(),
           }, ...prev]);
         });
-      setBookingSmsStatus("Telemedicine session requested and routed to Call Centre. WhatsApp QR code prepared.");
+      setBookingSmsStatus("Telemedicine session requested and routed to Call Centre. Awaiting admin confirmation.");
     } else {
       // (Herbal Consultation, Laboratory Tests, Follow-up Visit, Prescription Refill, Skin & Dermatology)
+      const targetStatus = isFollowUp ? "Follow-up" : "Pending";
       const newPatient: PatientEntry = {
         id: Date.now(),
         name: confirmedBooking.fullName.trim() || "New Patient",
         phone: confirmedBooking.phone.trim() || "+233 24 000 0000",
         condition: confirmedBooking.service || "Herbal Consultation",
-        lastVisit: "Just booked",
+        lastVisit: isFollowUp ? "Follow-up scheduled" : "Just booked",
         nextAppt: confirmedBooking.date ? `${confirmedBooking.date} · ${confirmedBooking.time}` : "Pending",
         doctor: selectedDoctor.name,
-        status: "Active",
+        status: targetStatus,
         balance: 0,
         products: confirmedBooking.service ? [confirmedBooking.service] : [],
       };
@@ -2255,7 +2308,7 @@ export default function App() {
             condition: newPatient.condition,
             nextAppt: newPatient.nextAppt,
             doctor: newPatient.doctor,
-            status: "Active",
+            status: targetStatus,
           } : p);
         }
         return [newPatient, ...prev];
@@ -2268,9 +2321,9 @@ export default function App() {
         doctor: selectedDoctor.name,
         date: confirmedBooking.date || "Pending",
         time: confirmedBooking.time || "Pending",
-        status: "Confirmed",
+        status: "Pending",
       });
-      setBookingSmsStatus("Clinical appointment confirmed and recorded in Patient CRM.");
+      setBookingSmsStatus(isFollowUp ? "Follow-up appointment received and listed in Follow-up section." : "Appointment received and waiting in Pending section for admin confirmation.");
     }
 
     sendAppointmentSms(confirmedBooking);
@@ -3786,6 +3839,16 @@ export default function App() {
                         </div>
                         <div className="flex items-center gap-2 self-start sm:self-auto">
                           <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ background: sc.bg, color: sc.text }}>{statusLabel}</span>
+                          {a.status === "Pending" && (
+                            <button
+                              type="button"
+                              onClick={() => confirmAppointmentStatus(a.id)}
+                              className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors shadow-xs"
+                              title="Confirm this appointment"
+                            >
+                              ✓ Confirm
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
@@ -3948,6 +4011,16 @@ export default function App() {
                               style={{ color: k==="Outstanding Balance"&&selPatient.balance>0 ? R : "#111827" }}>{v}</span>
                           </div>
                         ))}
+                        {selPatient.status === "Pending" && (
+                          <button
+                            type="button"
+                            onClick={() => activatePendingPatient(selPatient)}
+                            className="w-full text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm mb-2"
+                            style={{ background: G }}
+                          >
+                            ✓ Confirm & Move to Active Section
+                          </button>
+                        )}
                         <div className="flex gap-2 pt-2 flex-wrap">
                           <button
                             type="button"
@@ -3955,7 +4028,7 @@ export default function App() {
                             className="flex-1 min-w-[140px] text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
                             style={{ background:G }}
                           >
-                            Confirm Appointment
+                            Book Appointment
                           </button>
                           <button
                             type="button"
