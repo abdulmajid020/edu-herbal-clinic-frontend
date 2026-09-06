@@ -698,6 +698,8 @@ export default function App() {
     message: "",
     date: "",
     time: "",
+    sendSms: false,
+    targetDepartment: "All",
   });
   const [staffFilter,   setStaffFilter  ] = useState<"Present" | "Leave" | "Remote" | null>(null);
   const [staffSearch,   setStaffSearch  ] = useState("");
@@ -4673,6 +4675,8 @@ export default function App() {
                         message: "",
                         date: new Date().toISOString().split("T")[0],
                         time: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+                        sendSms: false,
+                        targetDepartment: "All",
                       });
                       setAnnouncementModalOpen(true);
                     }}
@@ -5100,10 +5104,16 @@ export default function App() {
 
                         setStaffAnnouncements(prev => [newAnn, ...prev]);
                         setAnnouncementModalOpen(false);
-                        setAnnouncementFormData({ title: "", message: "", date: "", time: "" });
+                        const willSendSms = announcementFormData.sendSms;
+                        const targetDept = announcementFormData.targetDepartment;
+                        setAnnouncementFormData({ title: "", message: "", date: "", time: "", sendSms: false, targetDepartment: "All" });
 
                         try {
-                          await StaffService.postAnnouncement(newAnn);
+                          await StaffService.postAnnouncement({
+                            ...newAnn,
+                            sendSms: willSendSms,
+                            targetDepartment: targetDept,
+                          });
                         } catch (err) {
                           console.warn("[POST ANNOUNCEMENT ERROR]", err);
                         }
@@ -5145,15 +5155,54 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Announcement Message *</label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Announcement Message *</label>
+                          <span className="text-[11px] text-gray-400">
+                            {announcementFormData.message.length} chars {announcementFormData.sendSms && `(~${Math.ceil((announcementFormData.title.length + announcementFormData.message.length + 30) / 160) || 1} SMS)`}
+                          </span>
+                        </div>
                         <textarea
                           required
-                          rows={4}
+                          rows={3}
                           value={announcementFormData.message}
                           onChange={e => setAnnouncementFormData(a => ({ ...a, message: e.target.value }))}
                           placeholder="Write the briefing message, schedule, or reminder for clinic staff…"
                           className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-medium text-gray-900 shadow-sm focus:border-amber-600 focus:ring-2 focus:ring-amber-600/20 focus:outline-none"
                         />
+                      </div>
+
+                      {/* ── SMS Broadcast Options ── */}
+                      <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-3.5 space-y-3">
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={announcementFormData.sendSms}
+                            onChange={e => setAnnouncementFormData(a => ({ ...a, sendSms: e.target.checked }))}
+                            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                            📱 Dispatch as SMS Alert via Arkesel
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-200/70 text-amber-900 font-bold uppercase">SMS Gateway</span>
+                          </span>
+                        </label>
+
+                        {announcementFormData.sendSms && (
+                          <div className="pt-1.5 border-t border-amber-200/60 flex flex-col sm:flex-row gap-2.5 items-start sm:items-center justify-between text-xs">
+                            <span className="text-gray-600 font-medium">Target Staff Group:</span>
+                            <select
+                              value={announcementFormData.targetDepartment}
+                              onChange={e => setAnnouncementFormData(a => ({ ...a, targetDepartment: e.target.value }))}
+                              className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                            >
+                              <option value="All">All Departments (Entire Team)</option>
+                              <option value="Clinical">Clinical Staff Only</option>
+                              <option value="Dispensary">Dispensary / Pharmacy</option>
+                              <option value="Laboratory">Laboratory Team</option>
+                              <option value="CRM">CRM & Call Agents</option>
+                              <option value="Admin">Administration</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-3 pt-2 justify-end">
@@ -5169,7 +5218,7 @@ export default function App() {
                           className="rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90 transition-opacity cursor-pointer"
                           style={{ background:OR }}
                         >
-                          Broadcast Announcement
+                          {announcementFormData.sendSms ? "Broadcast Announcement & SMS" : "Broadcast Announcement"}
                         </button>
                       </div>
                     </form>

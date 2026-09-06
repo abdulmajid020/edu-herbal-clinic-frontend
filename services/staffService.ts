@@ -100,10 +100,17 @@ export class StaffService {
     return apiRequest("/staff/announcements");
   }
 
-  public static async postAnnouncement(params: { title: string; message: string; author?: string }): Promise<{
+  public static async postAnnouncement(params: {
+    title: string;
+    message: string;
+    author?: string;
+    sendSms?: boolean;
+    targetDepartment?: string;
+  }): Promise<{
     success: boolean;
     message: string;
     announcement: StaffAnnouncement;
+    sms?: any;
   }> {
     return apiRequest("/staff/announcements", {
       method: "POST",
