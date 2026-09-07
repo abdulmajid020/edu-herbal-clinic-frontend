@@ -75,6 +75,53 @@ export class PatientService {
     });
   }
 
+  public static async loginPatient(params: { email: string; phone: string; password: string }): Promise<{
+    success: boolean;
+    message: string;
+    patient: Patient;
+    appointments?: any[];
+    payments?: any[];
+    orders?: any[];
+  }> {
+    return apiRequest("/patients/login", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  public static async signupPatient(params: {
+    name: string;
+    email: string;
+    phone: string;
+    password: string;
+    confirmPassword?: string;
+    condition?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    patient: Patient;
+  }> {
+    return apiRequest("/patients/signup", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  public static async resetPatientPassword(params: {
+    email: string;
+    phone: string;
+    newPassword: string;
+    confirmPassword?: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    return apiRequest("/patients/reset", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   public static async deletePatient(id: number): Promise<ApiResponse> {
     return apiRequest(`/patients/${id}`, {
       method: "DELETE",

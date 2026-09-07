@@ -1,4 +1,4 @@
-import { apiRequest, ApiResponse } from "./apiClient";
+import { apiRequest, ApiResponse, API_BASE_URL, getAuthToken, ApiError } from "./apiClient";
 
 export interface HeroSlide {
   id: number;
@@ -30,7 +30,52 @@ export interface BlogPost {
   isPublished: boolean;
 }
 
+export interface MediaUploadResponse {
+  success: boolean;
+  message?: string;
+  data: {
+    url: string;
+    secureUrl: string;
+    publicId: string;
+    format: string;
+    bytes: number;
+    storage: "cloudinary" | "local-fallback";
+  };
+}
+
 export class ContentService {
+  /**
+   * Upload an image file directly to Cloudinary via backend API
+   */
+  public static async uploadImage(file: File, folder: string = "edu-herbal/blog"): Promise<MediaUploadResponse> {
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("folder", folder);
+
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}/content/upload`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new ApiError(data?.error || "Failed to upload image to Cloudinary", response.status);
+      }
+
+      return data as MediaUploadResponse;
+    } catch (err: any) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(err.message || "Network request failed during image upload", 500);
+    }
+  }
+
   public static async getHeroSlides(): Promise<{ success: boolean; data: HeroSlide[] }> {
     return apiRequest("/content/hero-slides");
   }

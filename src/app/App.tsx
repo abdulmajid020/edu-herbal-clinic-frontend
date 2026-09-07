@@ -7,12 +7,14 @@ import {
   Send, Plus, Mail, Shield, ChevronRight, Bot, LogOut,
   Inbox, Microscope, Moon, Sun, Trash2, Megaphone, Pencil,
   FlaskConical, Footprints, BedDouble, Ambulance, Home, UserCheck,
-  Eye, EyeOff
+  Eye, EyeOff, History, CreditCard, Lock, HeartPulse, CheckCircle2, AlertCircle, User,
+  Upload, Image as ImageIcon, Loader2,
 } from "lucide-react";
+
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/app/components/ui/carousel";
-import { AuthService, getAuthToken, StaffUser, ProductService, InventoryService, AppointmentService, PatientService, CallService, CallLog, StaffService, StaffMember, StaffAnnouncement, OrderService, PaymentService, ChatService } from "@/services";
+import { AuthService, getAuthToken, StaffUser, ProductService, InventoryService, AppointmentService, PatientService, CallService, CallLog, StaffService, StaffMember, StaffAnnouncement, OrderService, PaymentService, ChatService, ContentService } from "@/services";
 import clinicLogo from "@/imports/photo_2024-05-10_11-09-44-1.jpg";
 import service5Image from "@/imports/service-5.jpg";
 import service1Image from "@/imports/service-1.jpg";
@@ -63,14 +65,18 @@ type PatientEntry = (typeof PATIENTS)[number] & {
 type PatientAppointment = {
   id: number;
   patientName: string;
+  fullName?: string;
   phone: string;
   service: string;
   doctor: string;
+  doctorId?: number;
+  doctorName?: string;
   date: string;
   time: string;
   status: "Confirmed" | "Pending" | "Completed" | "Upcoming";
   createdAt: string;
 };
+
 
 type PatientPayment = {
   id: number;
@@ -168,13 +174,22 @@ const TESTIMONIALS = [
   { name:"Adwoa Sarpong",        condition:"Low libido",       date:"May 2026",   rating:5,text:"Edu Herbal medicine transformed my life by addressing my low libido. I'm grateful for the holistic healing it offers. By meeting their professional doctors, I got my value back again."           },
 ];
 
-const INITIAL_BLOG_POSTS = [
-  { title:"7 Herbs That Naturally Lower Blood Sugar", category:"Diabetes", date:"28 June 2025", readTime:"5 min", excerpt:"Discover scientifically-backed herbal remedies that clinical trials show can meaningfully support healthy blood glucose levels.", image: news3 },
-  { title:"Managing Hypertension Without Synthetic Drugs", category:"Heart Health", date:"15 June 2025", readTime:"7 min", excerpt:"High blood pressure doesn't always demand pharmaceutical intervention. Here's what lifestyle medicine and herbal protocols achieve.", image: news4 },
-  { title:"The Complete Guide to Herbal Liver Detoxification", category:"Wellness", date:"3 June 2025", readTime:"6 min", excerpt:"A well-designed herbal detox supports liver, kidneys and lymphatic function simultaneously. Here is what actually works.", image: news5 },
-];
+export type BlogPostData = {
+  id?: number;
+  title: string;
+  category: string;
+  date: string;
+  readTime: string;
+  excerpt: string;
+  image: string;
+  content?: string | null;
+};
 
-type BlogPostData = (typeof INITIAL_BLOG_POSTS)[number];
+const INITIAL_BLOG_POSTS: BlogPostData[] = [
+  { id: 1, title:"7 Herbs That Naturally Lower Blood Sugar", category:"Diabetes", date:"28 June 2025", readTime:"5 min", excerpt:"Discover scientifically-backed herbal remedies that clinical trials show can meaningfully support healthy blood glucose levels.", image: news3, content: "" },
+  { id: 2, title:"Managing Hypertension Without Synthetic Drugs", category:"Heart Health", date:"15 June 2025", readTime:"7 min", excerpt:"High blood pressure doesn't always demand pharmaceutical intervention. Here's what lifestyle medicine and herbal protocols achieve.", image: news4, content: "" },
+  { id: 3, title:"The Complete Guide to Herbal Liver Detoxification", category:"Wellness", date:"3 June 2025", readTime:"6 min", excerpt:"A well-designed herbal detox supports liver, kidneys and lymphatic function simultaneously. Here is what actually works.", image: news5, content: "" },
+];
 
 const FAQS = [
   { q:"Do you treat stroke and neurological conditions?",a:"Yes. We have dedicated protocols for post-stroke rehabilitation, memory disorders and peripheral neuropathy, led by Dr. Edu Mohammed."                         },
@@ -749,6 +764,20 @@ export default function App() {
   const [blogDraftPosts, setBlogDraftPosts] = useState<BlogPostData[]>(getStoredBlogPosts);
   const [blogPosts, setBlogPosts] = useState<BlogPostData[]>(getStoredBlogPosts);
   const [blogSaveMessage, setBlogSaveMessage] = useState<string | null>(null);
+  const [blogPostModalOpen, setBlogPostModalOpen] = useState(false);
+  const [editingBlogPostIndex, setEditingBlogPostIndex] = useState<number | null>(null);
+  const [blogPostFormData, setBlogPostFormData] = useState<BlogPostData>({
+    title: "",
+    category: "Wellness",
+    date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+    readTime: "5 min",
+    excerpt: "",
+    content: "",
+    image: news6,
+  });
+  const [modalImageUploading, setModalImageUploading] = useState(false);
+  const [modalImageSuccess, setModalImageSuccess] = useState<string | null>(null);
+  const [modalImageError, setModalImageError] = useState<string | null>(null);
   const [isHeroTransitioning, setIsHeroTransitioning] = useState(true);
   const [heroSlides, setHeroSlides] = useState<HeroSlideData[]>(getStoredHeroSlides);
   const [heroDraftSlides, setHeroDraftSlides] = useState<HeroSlideData[]>(getStoredHeroSlides);
@@ -773,7 +802,7 @@ export default function App() {
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
   const [adminAuthLoading, setAdminAuthLoading] = useState(false);
   const [currentStaffUser, setCurrentStaffUser] = useState<StaffUser | null>(null);
-  const [adminMode, setAdminMode] = useState<"login" | "signup" | "reset">("login");
+  const [adminMode, setAdminMode] = useState<"login" | "reset">("login");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
@@ -783,6 +812,42 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [adminLoginError, setAdminLoginError] = useState("");
+
+  // Patient Portal Authentication State
+  const [patientAuthenticated, setPatientAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("eduPatientAuth") === "true";
+    }
+    return false;
+  });
+  const [currentPatient, setCurrentPatient] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("eduCurrentPatient");
+      if (saved) {
+        try { return JSON.parse(saved); } catch {}
+      }
+    }
+    return null;
+  });
+  const [patientAuthMode, setPatientAuthMode] = useState<"login" | "signup" | "reset">("login");
+  const [patientEmailInput, setPatientEmailInput] = useState("");
+  const [patientPhoneInput, setPatientPhoneInput] = useState("");
+  const [patientPasswordInput, setPatientPasswordInput] = useState("");
+  const [patientConfirmPasswordInput, setPatientConfirmPasswordInput] = useState("");
+  const [patientResetPasswordInput, setPatientResetPasswordInput] = useState("");
+  const [patientResetConfirmPasswordInput, setPatientResetConfirmPasswordInput] = useState("");
+  const [patientNameInput, setPatientNameInput] = useState("");
+  const [patientConditionInput, setPatientConditionInput] = useState("");
+  const [showPatientPassword, setShowPatientPassword] = useState(false);
+  const [showPatientConfirmPassword, setShowPatientConfirmPassword] = useState(false);
+  const [patientAuthLoading, setPatientAuthLoading] = useState(false);
+  const [patientAuthError, setPatientAuthError] = useState("");
+  const [patientAuthSuccess, setPatientAuthSuccess] = useState("");
+  const [uploadingBlogIndex, setUploadingBlogIndex] = useState<number | null>(null);
+  const [blogUploadSuccess, setBlogUploadSuccess] = useState<{ index: number; message: string } | null>(null);
+  const [blogUploadError, setBlogUploadError] = useState<{ index: number; message: string } | null>(null);
+
+
   const [mapModalOpen, setMapModalOpen] = useState(false);
   const [activeMapLocation, setActiveMapLocation] = useState<{ title:string; subtitle:string; address:string; desc:string; buttonLabel:string; accent:string; embedUrl:string } | null>(null);
   const [socialModal, setSocialModal] = useState<{ label: string; href: string } | null>(null);
@@ -1618,6 +1683,204 @@ export default function App() {
     setAdminMobileMenuOpen(false);
     setView("admin");
   };
+
+  const handlePatientLogin = async () => {
+    const email = patientEmailInput.trim().toLowerCase();
+    const phone = patientPhoneInput.trim();
+    const password = patientPasswordInput.trim();
+
+    if (!email || !phone || !password) {
+      setPatientAuthError("Email address, phone number, and password are all required to sign in.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setPatientAuthError("Please enter a valid email address.");
+      return;
+    }
+
+    try {
+      setPatientAuthLoading(true);
+      setPatientAuthError("");
+      setPatientAuthSuccess("");
+
+      const res = await PatientService.loginPatient({
+        email,
+        phone,
+        password,
+      });
+
+      if (res.success && res.patient) {
+        setCurrentPatient(res.patient);
+        setPatientAuthenticated(true);
+        setPaymentRecipientName(res.patient.name);
+        setPaymentRecipientNumber(res.patient.phone);
+        setPatientPasswordInput("");
+        setPatientAuthError("");
+        setPatientAuthSuccess(res.message || "Welcome to your Patient Portal!");
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem("eduPatientAuth", "true");
+          localStorage.setItem("eduCurrentPatient", JSON.stringify(res.patient));
+        }
+      } else {
+        setPatientAuthError(res.message || "Invalid credentials. If you are a new patient, please Sign Up.");
+      }
+    } catch (err: any) {
+      setPatientAuthError(err.message || "Failed to log in. Please check your email, phone number, and password.");
+    } finally {
+      setPatientAuthLoading(false);
+    }
+  };
+
+  const handlePatientSignup = async () => {
+    const name = patientNameInput.trim();
+    const email = patientEmailInput.trim().toLowerCase();
+    const phone = patientPhoneInput.trim();
+    const password = patientPasswordInput.trim();
+    const confirmPassword = patientConfirmPasswordInput.trim();
+    const condition = patientConditionInput.trim();
+
+    if (!name || !email || !phone || !password) {
+      setPatientAuthError("Full name, email address, phone number, and password are required.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setPatientAuthError("Please enter a valid email address.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setPatientAuthError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setPatientAuthError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setPatientAuthLoading(true);
+      setPatientAuthError("");
+      setPatientAuthSuccess("");
+
+      const res = await PatientService.signupPatient({
+        name,
+        email,
+        phone,
+        password,
+        confirmPassword,
+        condition: condition || undefined,
+      });
+
+      if (res.success) {
+        setPatientAuthSuccess("Registration successful! You can now sign in with your email, phone, and password.");
+        setPatientAuthMode("login");
+        setPatientPasswordInput("");
+        setPatientConfirmPasswordInput("");
+      } else {
+        setPatientAuthError(res.message || "Failed to register patient account.");
+      }
+    } catch (err: any) {
+      setPatientAuthError(err.message || "Registration failed.");
+    } finally {
+      setPatientAuthLoading(false);
+    }
+  };
+
+  const handlePatientReset = async () => {
+    const email = patientEmailInput.trim().toLowerCase();
+    const phone = patientPhoneInput.trim();
+    const newPassword = patientResetPasswordInput.trim();
+    const confirmPassword = patientResetConfirmPasswordInput.trim();
+
+    if (!email || !phone || !newPassword) {
+      setPatientAuthError("Enter your email, phone number, and a new password.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPatientAuthError("New password must be at least 6 characters long.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPatientAuthError("New passwords do not match.");
+      return;
+    }
+
+    try {
+      setPatientAuthLoading(true);
+      setPatientAuthError("");
+      setPatientAuthSuccess("");
+
+      const res = await PatientService.resetPatientPassword({
+        email,
+        phone,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (res.success) {
+        setPatientAuthSuccess("Password reset successful! You can now sign in with your new password.");
+        setPatientAuthMode("login");
+        setPatientResetPasswordInput("");
+        setPatientResetConfirmPasswordInput("");
+      } else {
+        setPatientAuthError(res.message || "Failed to reset password.");
+      }
+    } catch (err: any) {
+      setPatientAuthError(err.message || "Failed to reset password.");
+    } finally {
+      setPatientAuthLoading(false);
+    }
+  };
+
+  const handlePatientLogout = () => {
+    setPatientAuthenticated(false);
+    setCurrentPatient(null);
+    setPatientEmailInput("");
+    setPatientPhoneInput("");
+    setPatientPasswordInput("");
+    setPatientConfirmPasswordInput("");
+    setPatientResetPasswordInput("");
+    setPatientResetConfirmPasswordInput("");
+    setPatientNameInput("");
+    setPatientConditionInput("");
+    setPatientAuthError("");
+    setPatientAuthSuccess("");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("eduPatientAuth");
+      localStorage.removeItem("eduCurrentPatient");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    setView("public");
+  };
+
+
+  const handlePatientStartBooking = () => {
+    const patient = currentPatient || (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("eduCurrentPatient") || "null") : null);
+    setBooking(prev => ({
+      ...prev,
+      fullName: patient?.name || prev.fullName || "",
+      phone: patient?.phone || prev.phone || "",
+      email: patient?.email || prev.email || "",
+      service: prev.service || "Herbal Consultation",
+    }));
+    setBookingStep(0);
+    setBookingDone(false);
+    setView("public");
+    setTimeout(() => {
+      const el = document.getElementById("book");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 80);
+  };
+
+
 
   const addPatientAppointment = (appointment: Omit<PatientAppointment, "id" | "createdAt">) => {
     const entry: PatientAppointment = {
@@ -2909,6 +3172,30 @@ export default function App() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem("eduBlogPosts", JSON.stringify(blogDraftPosts));
     }
+    // Sync posts with backend
+    blogDraftPosts.forEach((post) => {
+      if (post.id && typeof post.id === "number" && post.id < 1000000000000) {
+        ContentService.updateBlogPost(post.id, {
+          title: post.title,
+          category: post.category,
+          date: post.date,
+          readTime: post.readTime,
+          excerpt: post.excerpt,
+          image: post.image,
+          content: post.content,
+        }).catch(() => null);
+      } else {
+        ContentService.createBlogPost({
+          title: post.title,
+          category: post.category,
+          date: post.date,
+          readTime: post.readTime,
+          excerpt: post.excerpt,
+          image: post.image,
+          content: post.content || undefined,
+        }).catch(() => null);
+      }
+    });
     setBlogSaveMessage("Blog post updates saved successfully.");
     setHeroEditorOpen(false);
     setBlogEditorOpen(false);
@@ -2926,22 +3213,136 @@ export default function App() {
     setBlogEditorOpen(false);
   };
 
+  const openCreateBlogPostModal = () => {
+    setEditingBlogPostIndex(null);
+    setBlogPostFormData({
+      title: "",
+      category: "Wellness",
+      date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+      readTime: "5 min",
+      excerpt: "",
+      content: "",
+      image: news6,
+    });
+    setModalImageError(null);
+    setModalImageSuccess(null);
+    setBlogPostModalOpen(true);
+  };
+
+  const openEditBlogPostModal = (index: number) => {
+    setEditingBlogPostIndex(index);
+    const target = blogDraftPosts[index];
+    if (target) {
+      setBlogPostFormData({ ...target });
+      setModalImageError(null);
+      setModalImageSuccess(null);
+      setBlogPostModalOpen(true);
+    }
+  };
+
+  const handleSaveBlogPostModal = async () => {
+    if (!blogPostFormData.title.trim() || !blogPostFormData.excerpt.trim()) {
+      alert("Please enter a title and excerpt for the blog post.");
+      return;
+    }
+
+    const updatedPost: BlogPostData = {
+      ...blogPostFormData,
+      title: blogPostFormData.title.trim(),
+      category: blogPostFormData.category.trim() || "Updates",
+      excerpt: blogPostFormData.excerpt.trim(),
+      date: blogPostFormData.date || new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+      readTime: blogPostFormData.readTime || "5 min",
+      image: blogPostFormData.image || news6,
+    };
+
+    let nextDrafts: BlogPostData[] = [];
+
+    if (editingBlogPostIndex !== null && editingBlogPostIndex >= 0) {
+      nextDrafts = blogDraftPosts.map((p, idx) => idx === editingBlogPostIndex ? updatedPost : p);
+      setBlogDraftPosts(nextDrafts);
+      setBlogPosts(nextDrafts);
+      if (updatedPost.id && typeof updatedPost.id === "number" && updatedPost.id < 1000000000000) {
+        ContentService.updateBlogPost(updatedPost.id, updatedPost).catch(() => null);
+      }
+    } else {
+      const newPostWithId = { ...updatedPost, id: Date.now() };
+      nextDrafts = [newPostWithId, ...blogDraftPosts];
+      setBlogDraftPosts(nextDrafts);
+      setBlogPosts(nextDrafts);
+      ContentService.createBlogPost(updatedPost).catch(() => null);
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("eduBlogPosts", JSON.stringify(nextDrafts));
+    }
+
+    setBlogPostModalOpen(false);
+    setBlogSaveMessage(editingBlogPostIndex !== null ? "Blog post updated successfully!" : "New blog post published successfully!");
+    setTimeout(() => setBlogSaveMessage(null), 4000);
+  };
+
+  const handleModalImageUpload = async (file: File) => {
+    if (!file) return;
+    try {
+      setModalImageUploading(true);
+      setModalImageError(null);
+      setModalImageSuccess(null);
+      const res = await ContentService.uploadImage(file, "edu-herbal/blog");
+      if (res.success && res.data?.secureUrl) {
+        setBlogPostFormData(prev => ({ ...prev, image: res.data.secureUrl }));
+        setModalImageSuccess("Image uploaded successfully!");
+        setTimeout(() => setModalImageSuccess(null), 4000);
+      }
+    } catch (err: any) {
+      setModalImageError(err.message || "Failed to upload image.");
+      setTimeout(() => setModalImageError(null), 5000);
+    } finally {
+      setModalImageUploading(false);
+    }
+  };
+
   const addBlogPost = () => {
-    setBlogDraftPosts(prev => [
-      ...prev,
-      {
-        title: "New clinic update",
-        category: "Updates",
-        date: "Today",
-        readTime: "3 min",
-        excerpt: "Add a fresh update for your audience.",
-        image: news6,
-      },
-    ]);
+    openCreateBlogPostModal();
   };
 
   const removeBlogPost = (index: number) => {
-    setBlogDraftPosts(prev => prev.filter((_, postIndex) => postIndex !== index));
+    const nextDrafts = blogDraftPosts.filter((_, postIndex) => postIndex !== index);
+    setBlogDraftPosts(nextDrafts);
+    setBlogPosts(nextDrafts);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("eduBlogPosts", JSON.stringify(nextDrafts));
+    }
+    const target = blogDraftPosts[index];
+    if (target?.id && typeof target.id === "number" && target.id < 1000000000000) {
+      ContentService.deleteBlogPost(target.id).catch(() => null);
+    }
+  };
+
+  const handleBlogImageUpload = async (index: number, file: File) => {
+    if (!file) return;
+    try {
+      setUploadingBlogIndex(index);
+      setBlogUploadError(null);
+      setBlogUploadSuccess(null);
+      const res = await ContentService.uploadImage(file, "edu-herbal/blog");
+      if (res.success && res.data?.secureUrl) {
+        updateBlogDraftPost(index, "image", res.data.secureUrl);
+        setBlogUploadSuccess({
+          index,
+          message: "Image uploaded successfully!",
+        });
+        setTimeout(() => setBlogUploadSuccess(null), 4000);
+      }
+    } catch (err: any) {
+      setBlogUploadError({
+        index,
+        message: err.message || "Failed to upload image.",
+      });
+      setTimeout(() => setBlogUploadError(null), 5000);
+    } finally {
+      setUploadingBlogIndex(null);
+    }
   };
 
   const handlePortalBack = () => {
@@ -3040,19 +3441,339 @@ export default function App() {
           )}
         </div>
       )}
+      {sub === "Patient Portal" && patientAuthenticated && (
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:block text-right">
+            <p className="text-xs font-bold leading-none">{currentPatient?.name || "Patient"}</p>
+            <p className="text-[11px] text-green-200 mt-0.5">{currentPatient?.phone || ""}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handlePatientLogout}
+            className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-red-600/90 shadow-sm"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Log Out</span>
+          </button>
+        </div>
+      )}
     </header>
     );
   };
+
 
   // ════════════════════════════════════════════════════════════════════════
   // PATIENT PORTAL
   // ════════════════════════════════════════════════════════════════════════
 
   if (view === "patient") {
-    const displayPatient = crmPatients[0] || { name: "Patient", phone: "", condition: "", lastVisit: "", nextAppt: "", doctor: "", status: "Active", balance: 0, products: [], id: 0 };
+    // ── Unauthenticated Patient Gate ──────────────────────────────────────────
+    if (!patientAuthenticated) {
+      return (
+        <div className={`flex min-h-[100svh] items-center justify-center overflow-x-hidden ${isDarkMode ? "bg-slate-950 text-slate-100" : "bg-[#e9edf7] text-slate-900"} px-3 py-6 sm:px-4 sm:py-12`}>
+          <div className="w-full max-w-md rounded-[1.5rem] border border-white/70 bg-[#e9edf7] p-5 shadow-[12px_12px_26px_rgba(163,177,198,0.55),-12px_-12px_26px_rgba(255,255,255,0.9)] sm:rounded-[2rem] sm:p-8 sm:shadow-[18px_18px_38px_rgba(163,177,198,0.55),-18px_-18px_38px_rgba(255,255,255,0.9)]">
+            <div className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#e9edf7] p-2 shadow-[6px_6px_12px_rgba(163,177,198,0.45),-6px_-6px_12px_rgba(255,255,255,0.9)]">
+                <Logo size={48} ring={false} />
+              </div>
+              <p className="mt-4 text-[0.68rem] font-bold uppercase tracking-[0.22em] text-green-700 sm:mt-5 sm:text-xs sm:tracking-[0.32em]">Edu Herbal Clinic</p>
+              <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Patient Portal</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Access your clinical consultations, prescriptions, and order medications securely.</p>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div className="flex overflow-hidden rounded-full border border-white/80 bg-[#e9edf7] p-1 shadow-[inset_3px_3px_7px_rgba(163,177,198,0.35),inset_-3px_-3px_7px_rgba(255,255,255,0.85)]">
+                <button
+                  type="button"
+                  onClick={() => { setPatientAuthMode("login"); setPatientAuthError(""); setPatientAuthSuccess(""); }}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${patientAuthMode === "login" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPatientAuthMode("signup"); setPatientAuthError(""); setPatientAuthSuccess(""); }}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${patientAuthMode === "signup" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
+                >
+                  Sign Up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPatientAuthMode("reset"); setPatientAuthError(""); setPatientAuthSuccess(""); }}
+                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${patientAuthMode === "reset" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
+                >
+                  Reset
+                </button>
+              </div>
+
+              {/* Full Name for Signup */}
+              {patientAuthMode === "signup" && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Full Name *</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={patientNameInput}
+                      onChange={(e) => setPatientNameInput(e.target.value)}
+                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                      placeholder="e.g. Ama Serwaa Boateng"
+                    />
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  </div>
+                </div>
+              )}
+
+              {/* Email Address */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Email Address *</label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={patientEmailInput}
+                    onChange={(e) => setPatientEmailInput(e.target.value)}
+                    className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                    placeholder="name@example.com"
+                  />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                </div>
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Phone Number *</label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={patientPhoneInput}
+                    onChange={(e) => setPatientPhoneInput(e.target.value)}
+                    className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                    placeholder="0241234567 or +233241234567"
+                  />
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                </div>
+              </div>
+
+
+
+              {/* Password for Login */}
+              {patientAuthMode === "login" && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Password *</label>
+                    <button
+                      type="button"
+                      onClick={() => setPatientAuthMode("reset")}
+                      className="text-[11px] font-semibold text-green-700 hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showPatientPassword ? "text" : "password"}
+                      value={patientPasswordInput}
+                      onChange={(e) => setPatientPasswordInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handlePatientLogin()}
+                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                      placeholder="Enter your password"
+                    />
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPatientPassword(!showPatientPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 focus:outline-none"
+                    >
+                      {showPatientPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Password for Signup */}
+              {patientAuthMode === "signup" && (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Password (Min 6 characters) *</label>
+                    <div className="relative">
+                      <input
+                        type={showPatientPassword ? "text" : "password"}
+                        value={patientPasswordInput}
+                        onChange={(e) => setPatientPasswordInput(e.target.value)}
+                        className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                        placeholder="Create a secure password"
+                      />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <button
+                        type="button"
+                        onClick={() => setShowPatientPassword(!showPatientPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 focus:outline-none"
+                      >
+                        {showPatientPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Confirm Password *</label>
+                    <div className="relative">
+                      <input
+                        type={showPatientConfirmPassword ? "text" : "password"}
+                        value={patientConfirmPasswordInput}
+                        onChange={(e) => setPatientConfirmPasswordInput(e.target.value)}
+                        className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                        placeholder="Re-enter password"
+                      />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <button
+                        type="button"
+                        onClick={() => setShowPatientConfirmPassword(!showPatientConfirmPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 focus:outline-none"
+                      >
+                        {showPatientConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Password for Reset */}
+              {patientAuthMode === "reset" && (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">New Password (Min 6 characters) *</label>
+                    <div className="relative">
+                      <input
+                        type={showPatientPassword ? "text" : "password"}
+                        value={patientResetPasswordInput}
+                        onChange={(e) => setPatientResetPasswordInput(e.target.value)}
+                        className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                        placeholder="Enter new password"
+                      />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <button
+                        type="button"
+                        onClick={() => setShowPatientPassword(!showPatientPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 focus:outline-none"
+                      >
+                        {showPatientPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.08em] text-slate-800">Confirm New Password *</label>
+                    <div className="relative">
+                      <input
+                        type={showPatientConfirmPassword ? "text" : "password"}
+                        value={patientResetConfirmPasswordInput}
+                        onChange={(e) => setPatientResetConfirmPasswordInput(e.target.value)}
+                        className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pl-10 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
+                        placeholder="Re-enter new password"
+                      />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <button
+                        type="button"
+                        onClick={() => setShowPatientConfirmPassword(!showPatientConfirmPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 focus:outline-none"
+                      >
+                        {showPatientConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {patientAuthError && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700 border border-red-200">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{patientAuthError}</span>
+                </div>
+              )}
+
+              {patientAuthSuccess && (
+                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{patientAuthSuccess}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (patientAuthMode === "login") handlePatientLogin();
+                  else if (patientAuthMode === "signup") handlePatientSignup();
+                  else handlePatientReset();
+                }}
+                disabled={patientAuthLoading}
+                className="w-full rounded-xl py-3.5 text-sm font-bold text-white shadow-lg transition-all hover:opacity-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: G }}
+              >
+                {patientAuthLoading ? (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4" />
+                    <span>
+                      {patientAuthMode === "login"
+                        ? "Sign In to Patient Portal"
+                        : patientAuthMode === "signup"
+                        ? "Create Patient Account"
+                        : "Reset Password"}
+                    </span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setView("public")}
+                className="w-full rounded-xl py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                ← Return to Public Website
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+
+    // ── Authenticated Patient Portal View ─────────────────────────────────────
+    const displayPatient = currentPatient || crmPatients.find(p => p.phone === currentPatient?.phone) || crmPatients[0] || {
+      name: "Valued Patient",
+      phone: "",
+      condition: "Herbal Wellness",
+      lastVisit: "Active",
+      nextAppt: "Consultation Scheduled",
+      doctor: "Dr. Edu Mohammed",
+      status: "Active",
+      balance: 0,
+      id: 1,
+    };
+
+    const myAppointments = patientAppointments.filter(
+      a => (displayPatient.phone && a.phone.includes(displayPatient.phone.replace(/\D/g, "").slice(-8))) ||
+           (((a.fullName || a.patientName || "").toLowerCase()).includes(displayPatient.name.toLowerCase()))
+    );
+
+
+    const myOrders = patientOrders.filter(
+      o => (displayPatient.name && o.description && o.description.length > 0)
+    );
+
+    const myPayments = patientPayments.filter(
+      p => (displayPatient.phone && p.recipientNumber.includes(displayPatient.phone.replace(/\D/g, "").slice(-8))) ||
+           (displayPatient.name && p.recipientName.toLowerCase().includes(displayPatient.name.toLowerCase()))
+    );
+
     const ptabs = [
+      { id:"appointments", label:"Appointments", icon:Calendar },
       { id:"orders",       label:"Order Meds",   icon:ShoppingBag },
+      { id:"history",      label:"Order History",icon:History },
+      { id:"payments",     label:"Payments",     icon:CreditCard },
+      { id:"profile",      label:"Health Info",  icon:HeartPulse },
     ];
+
     const selectedOrderItems = Object.entries(cart)
       .map(([id, quantity]) => {
         const product = PRODUCTS.find(p => p.id === Number(id));
@@ -3060,137 +3781,368 @@ export default function App() {
       })
       .filter((item): item is (typeof PRODUCTS[number] & { quantity: number }) => Boolean(item));
     const cartTotal = selectedOrderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const combinedMedicineOrders = patientOrders.reduce<Array<{ name: string; quantity: number; price: number }>>((acc, order) => {
-      order.items.forEach(item => {
-        const existing = acc.find(entry => entry.name === item.name);
-        if (existing) {
-          existing.quantity += item.quantity;
-          existing.price = item.price;
-        } else {
-          acc.push({ name: item.name, quantity: item.quantity, price: item.price });
-        }
-      });
-      return acc;
-    }, []);
 
     return (
-      <div className={`min-h-screen ${isDarkMode ? "bg-slate-950 text-slate-100" : "bg-[#f9fafb] text-slate-900"}`}>
+      <div className={`min-h-screen ${isDarkMode ? "bg-slate-950 text-slate-100" : "bg-[#f8fafc] text-slate-900"}`}>
         <PortalHeader title="Edu Herbal Clinic" sub="Patient Portal" onBack={() => setView("public")} darkMode={isDarkMode} onToggleDarkMode={toggleDarkMode} />
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          {/* tabs */}
-          <div className="flex gap-2 flex-wrap mb-8">
+
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 space-y-6">
+          {/* Patient Profile Card */}
+          <div className="rounded-3xl p-6 text-white shadow-xl relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${G} 0%, #155c2c 100%)` }}>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center font-bold text-2xl border border-white/20">
+                  {displayPatient.name.charAt(0)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl sm:text-2xl font-extrabold">{displayPatient.name}</h2>
+                    <span className="rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-xs font-semibold text-emerald-200 border border-emerald-400/30">
+                      {displayPatient.status || "Active Patient"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-emerald-100/80 mt-1 flex items-center gap-2">
+                    <span>📞 {displayPatient.phone || "No phone"}</span>
+                    <span>•</span>
+                    <span>🌿 {displayPatient.condition || "General Wellness"}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handlePatientStartBooking}
+                  className="rounded-full px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
+                  style={{ background: OR }}
+                >
+                  <Plus className="h-4 w-4" /> Book Consultation
+                </button>
+                <a
+                  href="tel:+233558379545"
+                  className="rounded-full bg-white/15 px-4 py-2.5 text-xs font-bold text-white backdrop-blur transition-colors hover:bg-white/25 flex items-center gap-1.5 border border-white/20"
+                >
+                  <Phone className="h-3.5 w-3.5" /> Call Clinic Helpline
+                </a>
+              </div>
+            </div>
+
+            {/* Quick Stats Grid */}
+            <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-white/15">
+              <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                <p className="text-[11px] text-emerald-200 uppercase font-bold tracking-wider">Assigned Doctor</p>
+                <p className="text-sm font-bold mt-1 text-white truncate">{displayPatient.assignedDoctorName || displayPatient.doctor || "Dr. Edu Mohammed"}</p>
+              </div>
+              <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                <p className="text-[11px] text-emerald-200 uppercase font-bold tracking-wider">Next Appointment</p>
+                <p className="text-sm font-bold mt-1 text-white truncate">{displayPatient.nextAppt || "Not scheduled"}</p>
+              </div>
+              <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                <p className="text-[11px] text-emerald-200 uppercase font-bold tracking-wider">Last Visit</p>
+                <p className="text-sm font-bold mt-1 text-white truncate">{displayPatient.lastVisit || "Active"}</p>
+              </div>
+              <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
+                <p className="text-[11px] text-emerald-200 uppercase font-bold tracking-wider">Account Balance</p>
+                <p className="text-sm font-bold mt-1 text-white">GHS {Number(displayPatient.balance || 0).toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
             {ptabs.map(t => (
-              <button key={t.id} onClick={() => setPatientTab(t.id)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all"
-                style={ patientTab === t.id
-                  ? { background:G, color:W }
-                  : { background:W, color:"#374151", border:`1px solid ${G}30` }
-                }>
-                <t.icon className="w-4 h-4" />{t.label}
+              <button
+                key={t.id}
+                onClick={() => setPatientTab(t.id)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all shrink-0 shadow-sm"
+                style={patientTab === t.id
+                  ? { background: G, color: W }
+                  : { background: isDarkMode ? "#1e293b" : W, color: isDarkMode ? "#cbd5e1" : "#374151", border: `1px solid ${G}30` }
+                }
+              >
+                <t.icon className="w-4 h-4" />
+                {t.label}
               </button>
             ))}
           </div>
 
-          {/* APPOINTMENTS TAB */}
-          {patientTab === "appointments" && null}
-
-          {/* ORDER MEDS TAB */}
-          {patientTab === "orders" && (
+          {/* 1. APPOINTMENTS TAB */}
+          {patientTab === "appointments" && (
             <div className="space-y-4">
-              <div className="rounded-2xl p-4 text-white shadow-lg sm:p-5" style={{ background: G }}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold">My Scheduled Appointments</h3>
+                <button
+                  onClick={handlePatientStartBooking}
+                  className="rounded-full px-4 py-2 text-xs font-bold text-white flex items-center gap-1.5 shadow-sm transition-all hover:opacity-90"
+                  style={{ background: G }}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Book Appointment
+                </button>
+              </div>
+
+              {myAppointments.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {myAppointments.map(appt => (
+                    <div key={appt.id} className={`rounded-2xl p-5 border shadow-sm transition-all ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 uppercase tracking-wide">
+                            {appt.status || "Confirmed"}
+                          </span>
+                          <h4 className="font-bold text-base mt-2">{appt.service || "Herbal Consultation"}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Doctor: {appt.doctorName || "Dr. Edu Mohammed"}</p>
+                        </div>
+                        <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-700">
+                          <Calendar className="h-5 w-5" />
+                        </div>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                        <span className="font-semibold text-slate-900 dark:text-slate-200">🗓️ {appt.date}</span>
+                        <span>⏰ {appt.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={`rounded-3xl p-8 text-center border ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                  <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+                  <h4 className="font-bold text-base">No upcoming appointments found</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">You do not have any active appointments scheduled. Click below to book a consultation with our herbal doctors.</p>
+                  <button
+                    onClick={handlePatientStartBooking}
+                    className="mt-4 rounded-full px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:opacity-90 inline-flex items-center gap-1.5"
+                    style={{ background: G }}
+                  >
+                    <Plus className="h-4 w-4" /> Book Appointment Now
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 2. ORDER MEDS TAB */}
+          {patientTab === "orders" && (
+            <div className="space-y-6">
+              {/* Cart Banner */}
+              <div className="rounded-2xl p-5 text-white shadow-lg" style={{ background: G }}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <span className="text-sm font-semibold sm:text-base">
-                      {selectedOrderItems.length > 0 ? `${selectedOrderItems.length} product(s) in cart` : "No products selected yet"}
+                    <span className="text-base font-bold">
+                      {selectedOrderItems.length > 0 ? `${selectedOrderItems.length} Medication Item(s) in Cart` : "Your Cart is Empty"}
                     </span>
-                    <p className="mt-1 text-sm text-white/80">Review your order and continue to checkout.</p>
+                    <p className="mt-0.5 text-xs text-white/80">Select prescribed herbal medications from the catalogue below to order.</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-                    <span className="text-base font-bold sm:text-lg" style={{ color: "#fed7aa" }}>GHS {cartTotal}</span>
-                    <button onClick={() => selectedOrderItems.length > 0 ? openPaymentPrompt(paymentMethod) : setCheckoutMessage("Add a product to your cart before checking out.")} className="rounded-full px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60" style={{ background: OR }}>
-                      Checkout
+                  <div className="flex items-center gap-4">
+                    <span className="text-lg font-bold" style={{ color: "#fed7aa" }}>GHS {cartTotal}</span>
+                    <button
+                      onClick={() => selectedOrderItems.length > 0 ? openPaymentPrompt(paymentMethod) : setCheckoutMessage("Add a medication to your cart first.")}
+                      className="rounded-full px-5 py-2.5 text-xs font-bold text-white shadow-md transition-transform hover:scale-105"
+                      style={{ background: OR }}
+                    >
+                      Checkout with MoMo
                     </button>
                   </div>
                 </div>
-                <div className="mt-4 space-y-2">
-                  {selectedOrderItems.length > 0 ? (
-                    selectedOrderItems.map(item => (
-                      <div key={item.id} className="flex flex-col gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex-1">
-                          <span>{item.name}</span>
+
+                {selectedOrderItems.length > 0 && (
+                  <div className="mt-4 space-y-2 pt-3 border-t border-white/20">
+                    {selectedOrderItems.map(item => (
+                      <div key={item.id} className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2 text-xs">
+                        <div>
+                          <span className="font-semibold">{item.name}</span>
                           <span className="ml-2 text-white/70">× {item.quantity}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-2 sm:justify-end">
-                          <span className="font-semibold">GHS {item.price * item.quantity}</span>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => removeFromCart(item.id)} className="rounded bg-white/20 px-2 py-1 transition-colors hover:bg-white/30">−</button>
-                            <button onClick={() => addToCart(item.id)} className="rounded bg-white/20 px-2 py-1 transition-colors hover:bg-white/30">+</button>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold">GHS {item.price * item.quantity}</span>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => removeFromCart(item.id)} className="rounded bg-white/20 px-2 py-0.5 transition-colors hover:bg-white/30">−</button>
+                            <button onClick={() => addToCart(item.id)} className="rounded bg-white/20 px-2 py-0.5 transition-colors hover:bg-white/30">+</button>
                           </div>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-xl bg-white/10 px-3 py-3 text-sm text-white/80">
-                      Add a product from the catalogue to see your order summary here.
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 rounded-xl border border-white/20 bg-white/10 p-3 sm:p-4">
-                  <p className="mb-2 text-sm font-semibold text-white/90">Payment method</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {(["Mobile Money", "Telecel Cash"] as const).map(method => (
-                      <button key={method} onClick={() => openPaymentPrompt(method)} className="rounded-full border px-3 py-2 text-sm font-semibold transition-colors" style={paymentMethod === method ? { borderColor: OR, background: `${OR}12`, color: OR } : { borderColor: "#ffffff33", color: "#ffffff" }}>
-                        {method}
-                      </button>
                     ))}
                   </div>
-                  {paymentRecipientName && paymentRecipientNumber && (
-                    <div className="mt-3 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">
-                      <p className="font-semibold">{paymentRecipientName}</p>
-                      <p className="text-white/80">{paymentRecipientNumber}</p>
-                    </div>
-                  )}
-                  {checkoutMessage && (
-                    <p className="mt-3 text-sm text-white/90">{checkoutMessage}</p>
-                  )}
-                  <p className="mt-2 text-xs text-white/70">We only accept Mobile Money or Telecel Cash for medicine checkout.</p>
-                </div>
-
-                {paymentPromptOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6">
-                    <div className="w-full max-w-md rounded-2xl bg-white p-5 text-gray-900 shadow-2xl">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-lg font-bold">Confirm payment details</h4>
-                        <button onClick={() => setPaymentPromptOpen(false)} className="text-sm font-semibold text-gray-500">Close</button>
-                      </div>
-                      <p className="mt-2 text-sm text-gray-600">Enter the name and phone number for {paymentPromptMethod || "your selected payment"}.</p>
-                      <div className="mt-4 space-y-3">
-                        <div>
-                          <label className="mb-1 block text-sm font-semibold text-gray-700">Full name</label>
-                          <input value={paymentPromptName} onChange={(e) => setPaymentPromptName(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ama Boateng" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-sm font-semibold text-gray-700">Phone number</label>
-                          <input value={paymentPromptNumber} onChange={(e) => setPaymentPromptNumber(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0241234567" />
-                        </div>
-                        {paymentPromptError && <p className="text-sm text-red-600">{paymentPromptError}</p>}
-                      </div>
-                      <div className="mt-5 flex justify-end gap-2">
-                        <button onClick={() => setPaymentPromptOpen(false)} className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">Cancel</button>
-                        <button onClick={confirmPaymentDetails} className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: OR }}>Confirm</button>
-                      </div>
-                    </div>
-                  </div>
                 )}
+              </div>
+
+              {checkoutMessage && (
+                <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
+                  {checkoutMessage}
+                </div>
+              )}
+
+              {/* Medication Catalogue Grid */}
+              <div>
+                <h3 className="text-base font-bold mb-4">Herbal Medication Catalogue</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {PRODUCTS.map(product => {
+                    const inCartQty = cart[product.id] || 0;
+                    return (
+                      <div key={product.id} className={`rounded-2xl p-4 border shadow-sm flex flex-col justify-between transition-all ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                        <div>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5">
+                                {product.category}
+                              </span>
+                              <h4 className="font-bold text-sm mt-1">{product.name}</h4>
+                            </div>
+                            <span className="font-extrabold text-sm" style={{ color: G }}>GHS {product.price}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-2 line-clamp-2">{product.desc || (product as any).description}</p>
+
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                          <span className="text-[11px] text-slate-400 font-medium">In Cart: {inCartQty}</span>
+                          <button
+                            onClick={() => addToCart(product.id)}
+                            className="rounded-full px-3.5 py-1.5 text-xs font-bold text-white transition-transform hover:scale-105 flex items-center gap-1 shadow-sm"
+                            style={{ background: G }}
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Add
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
 
+          {/* 3. ORDER HISTORY TAB */}
+          {patientTab === "history" && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold">Previous Medication Orders</h3>
+              {myOrders.length > 0 ? (
+                <div className="space-y-3">
+                  {myOrders.map(order => (
+                    <div key={order.id} className={`rounded-2xl p-4 border shadow-sm ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-bold text-emerald-600 uppercase">Order #{order.id}</span>
+                          <h4 className="font-bold text-sm mt-0.5">{order.description}</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">Method: {order.method} • Date: {order.date}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-base font-extrabold text-slate-900 dark:text-white">GHS {order.amount}</span>
+                          <span className="block text-[11px] font-bold text-emerald-600 mt-0.5">Paid & Processed</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={`rounded-3xl p-8 text-center border ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                  <History className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+                  <h4 className="font-bold text-base">No medication orders placed yet</h4>
+                  <p className="text-xs text-slate-500 mt-1">Orders you checkout through Mobile Money will appear here for tracking.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. PAYMENTS TAB */}
+          {patientTab === "payments" && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold">Payment & Receipt History</h3>
+              {myPayments.length > 0 ? (
+                <div className="space-y-3">
+                  {myPayments.map(payment => (
+                    <div key={payment.id} className={`rounded-2xl p-4 border shadow-sm ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                            <CreditCard className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm">{payment.description}</h4>
+                            <p className="text-xs text-slate-500">{payment.method} • {payment.date}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-sm">GHS {payment.amount}</span>
+                          <span className="block text-[11px] font-semibold text-emerald-600">{payment.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={`rounded-3xl p-8 text-center border ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                  <CreditCard className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+                  <h4 className="font-bold text-base">No payment records found</h4>
+                  <p className="text-xs text-slate-500 mt-1">Your Mobile Money payments and consultation fees will appear here.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 5. HEALTH PROFILE TAB */}
+          {patientTab === "profile" && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold">Patient Health Profile</h3>
+              <div className={`rounded-3xl p-6 border shadow-sm space-y-4 ${isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"}`}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 font-semibold uppercase">Patient Full Name</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{displayPatient.name}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 font-semibold uppercase">Contact Phone</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{displayPatient.phone || "Not set"}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 font-semibold uppercase">Primary Condition</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{displayPatient.condition || "Herbal Care"}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50">
+                    <p className="text-xs text-slate-500 font-semibold uppercase">Assigned Clinical Specialist</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">{displayPatient.doctor || "Dr. Edu Mohammed"}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
+                  <p className="font-bold flex items-center gap-1.5">🌿 Need Clinical Assistance or Prescription Guidance?</p>
+                  <p className="mt-1 text-emerald-800">Call our 24/7 Odorkor Branch Hotline at <strong>+233 55 837 9545</strong> or use our 24/7 EduBot AI assistant on the main website.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+
+          {/* Payment Modal for Medication Checkout */}
+          {paymentPromptOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 text-gray-900 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-bold">Confirm Payment Details</h4>
+                  <button onClick={() => setPaymentPromptOpen(false)} className="text-xs font-semibold text-gray-500">Close</button>
+                </div>
+                <p className="text-xs text-gray-600">Enter the name and phone number for {paymentPromptMethod || "your selected payment"}.</p>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="mb-1 block font-semibold text-gray-700">Full Name</label>
+                    <input value={paymentPromptName} onChange={(e) => setPaymentPromptName(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g. Ama Boateng" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-gray-700">Mobile Money / Phone Number</label>
+                    <input value={paymentPromptNumber} onChange={(e) => setPaymentPromptNumber(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0241234567" />
+                  </div>
+                  {paymentPromptError && <p className="text-xs text-red-600 font-semibold">{paymentPromptError}</p>}
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={() => setPaymentPromptOpen(false)} className="rounded-full border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-600">Cancel</button>
+                  <button onClick={confirmPaymentDetails} className="rounded-full px-5 py-2 text-xs font-bold text-white shadow-md" style={{ background: OR }}>Confirm & Pay GHS {cartTotal}</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
+
 
   // ════════════════════════════════════════════════════════════════════════
   // ADMIN DASHBOARD
@@ -3218,13 +4170,6 @@ export default function App() {
                   className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${adminMode === "login" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
                 >
                   Login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminMode("signup")}
-                  className={`flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide text-black transition-all ${adminMode === "signup" ? "bg-[#e9edf7] shadow-[3px_3px_7px_rgba(163,177,198,0.4),-3px_-3px_7px_rgba(255,255,255,0.9)]" : "opacity-60"}`}
-                >
-                  Sign Up
                 </button>
                 <button
                   type="button"
@@ -3322,29 +4267,6 @@ export default function App() {
                 </div>
               )}
 
-              {adminMode === "signup" ? (
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-black">Confirm Password</label>
-                  <div className="relative">
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={adminConfirmPassword}
-                      onChange={(e) => setAdminConfirmPassword(e.target.value)}
-                      className="w-full rounded-xl border border-white/80 bg-[#e9edf7] px-4 py-3 pr-11 text-sm font-medium tracking-wide text-black placeholder:font-normal placeholder:text-black/50 shadow-[inset_5px_5px_10px_rgba(163,177,198,0.4),inset_-5px_-5px_10px_rgba(255,255,255,0.9)] outline-none focus:border-green-600"
-                      placeholder="Re-enter password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-black/60 hover:text-black focus:outline-none"
-                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
               {adminLoginError ? (
                 <p
                   className={`text-sm font-medium ${
@@ -3361,10 +4283,10 @@ export default function App() {
 
               <button
                 disabled={adminAuthLoading}
-                onClick={adminMode === "login" ? handleAdminLogin : adminMode === "signup" ? handleAdminSignup : handleAdminPasswordReset}
+                onClick={adminMode === "login" ? handleAdminLogin : handleAdminPasswordReset}
                 className="w-full rounded-xl bg-[#e9edf7] px-4 py-3 text-sm font-bold uppercase tracking-[0.08em] text-black shadow-[7px_7px_14px_rgba(163,177,198,0.5),-7px_-7px_14px_rgba(255,255,255,0.9)] transition-shadow hover:shadow-[4px_4px_8px_rgba(163,177,198,0.5),-4px_-4px_8px_rgba(255,255,255,0.9)] disabled:opacity-50"
               >
-                {adminAuthLoading ? "Please wait..." : adminMode === "login" ? "Sign In" : adminMode === "signup" ? "Create Account" : "Reset Password"}
+                {adminAuthLoading ? "Please wait..." : adminMode === "login" ? "Sign In" : "Reset Password"}
               </button>
 
             </div>
@@ -3479,103 +4401,324 @@ export default function App() {
                   </div>
                 </>
               ) : (
-                <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm space-y-6">
+                  {/* Top Header & Actions */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
                     <div>
                       <p className="text-sm font-semibold uppercase tracking-[0.25em]" style={{ color:OR }}>From Our Clinic Blog</p>
-                      <p className="mt-1 text-sm text-gray-500">Manage the posts shown in the public blog carousel.</p>
+                      <h2 className="text-xl font-bold text-gray-900 mt-1">Manage Clinic Articles</h2>
+                      <p className="text-xs text-gray-500">Create, edit, or remove articles shown in the public blog section.</p>
                     </div>
-                    <button onClick={addBlogPost} className="rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:shadow-md">
-                      Add post
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={openCreateBlogPostModal}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-all"
+                      >
+                        <Plus className="w-4 h-4 text-green-700" />
+                        Add Post
+                      </button>
+                      <button
+                        onClick={submitBlogChanges}
+                        className="inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-bold text-white shadow-md hover:opacity-90 transition-opacity"
+                        style={{ background: G }}
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Save Changes
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mb-6 rounded-[1.75rem] border border-gray-100 bg-gradient-to-br from-[#f0faf3] via-white to-[#fff7ed] p-5 shadow-sm">
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.25em]" style={{ color:OR }}>Preview</p>
-                        <p className="mt-1 text-sm text-gray-500">Review the selected post before publishing updates.</p>
+                  {/* Feedback Banner */}
+                  {blogSaveMessage && (
+                    <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800 flex items-center justify-between animate-fadeIn">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span>{blogSaveMessage}</span>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setBlogSaveMessage(null)} className="text-green-700 hover:text-green-900">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Live Preview Card (Solid, Simple, Clear & Short) */}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-700">Live Preview</span>
+                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
                         {blogDraftPosts.map((post, index) => (
                           <button
                             key={`${post.title}-${index}`}
                             onClick={() => setSelectedBlogPreviewIndex(index)}
-                            className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${selectedBlogPreviewIndex === index ? "text-white shadow-sm" : "bg-gray-100 text-gray-700"}`}
-                            style={selectedBlogPreviewIndex === index ? { background:G } : {}}
+                            className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                              selectedBlogPreviewIndex === index
+                                ? "bg-green-700 text-white shadow-sm"
+                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            }`}
                           >
-                            {post.title || `Post ${index + 1}`}
+                            {post.title ? (post.title.length > 20 ? post.title.slice(0, 20) + "..." : post.title) : `Post ${index + 1}`}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    <div className="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-sm">
-                      <div className="relative h-56 w-full">
+                    {/* Short Solid Card */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3">
+                      <div className="relative h-24 w-full sm:w-36 rounded-lg overflow-hidden border border-gray-200 bg-gray-200 flex-shrink-0">
                         <img
                           src={blogDraftPosts[selectedBlogPreviewIndex]?.image || news6}
                           alt={blogDraftPosts[selectedBlogPreviewIndex]?.title || "Blog preview"}
                           className="h-full w-full object-cover"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = news6; }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                        <div className="absolute bottom-0 left-0 right-0 p-6">
-                          <div className="inline-flex rounded-full border border-white/20 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-white backdrop-blur">
-                            {blogDraftPosts[selectedBlogPreviewIndex]?.category || "Updates"}
-                          </div>
-                          <h3 className="mt-3 font-display text-2xl font-semibold leading-tight text-white">
-                            {blogDraftPosts[selectedBlogPreviewIndex]?.title || "Your new blog post title"}
-                          </h3>
-                          <p className="mt-2 text-sm text-white/80">
-                            {blogDraftPosts[selectedBlogPreviewIndex]?.date || "Today"} • {blogDraftPosts[selectedBlogPreviewIndex]?.readTime || "3 min read"}
-                          </p>
-                        </div>
                       </div>
-                      <div className="p-6">
-                        <p className="text-sm leading-7 text-gray-600">
-                          {blogDraftPosts[selectedBlogPreviewIndex]?.excerpt || "Add a compelling excerpt to preview how your post will appear to visitors."}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-block rounded-full bg-green-100 px-2.5 py-0.5 text-[10px] font-bold text-green-800 uppercase tracking-wide">
+                            {blogDraftPosts[selectedBlogPreviewIndex]?.category || "Updates"}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {blogDraftPosts[selectedBlogPreviewIndex]?.date || "Today"} • {blogDraftPosts[selectedBlogPreviewIndex]?.readTime || "3 min read"}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-gray-900 text-sm sm:text-base line-clamp-1 mb-1">
+                          {blogDraftPosts[selectedBlogPreviewIndex]?.title || "Your blog post title"}
+                        </h4>
+                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                          {blogDraftPosts[selectedBlogPreviewIndex]?.excerpt || "Short summary preview of how this post appears to visitors."}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    {blogDraftPosts.map((post, index) => (
-                      <div key={`${post.title}-${index}`} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-gray-900">{post.title || `Blog post ${index + 1}`}</p>
-                          {blogDraftPosts.length > 1 ? (
-                            <button onClick={() => removeBlogPost(index)} className="text-sm font-semibold text-red-600">Remove</button>
-                          ) : null}
+                  {/* Blog Posts Grid with Edit & Remove */}
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 mb-3">Published Articles ({blogDraftPosts.length})</h3>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {blogDraftPosts.map((post, index) => (
+                        <div key={`${post.title}-${index}`} className="flex flex-col justify-between rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                          <div>
+                            <div className="relative h-36 w-full rounded-xl overflow-hidden border border-gray-100 mb-3">
+                              <img src={post.image || news6} alt={post.title} className="h-full w-full object-cover" />
+                              <span className="absolute top-2 left-2 rounded-full bg-black/60 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
+                                {post.category || "General"}
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-gray-900 text-sm line-clamp-2 mb-1">{post.title || "Untitled Post"}</h4>
+                            <p className="text-xs text-gray-400 mb-2">{post.date || "Today"} • {post.readTime || "5 min"}</p>
+                            <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed mb-4">{post.excerpt}</p>
+                          </div>
+                          <div className="flex items-center gap-2 border-t border-gray-100 pt-3">
+                            <button
+                              onClick={() => openEditBlogPostModal(index)}
+                              className="flex-1 inline-flex items-center justify-center gap-1 rounded-xl border border-gray-200 bg-gray-50 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-green-700" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => removeBlogPost(index)}
+                              className="inline-flex items-center justify-center gap-1 rounded-xl border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                              title="Delete Post"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <label className="block text-sm font-semibold text-gray-700">
-                            Title
-                            <input value={post.title} onChange={(e) => updateBlogDraftPost(index, "title", e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-500" />
-                          </label>
-                          <label className="block text-sm font-semibold text-gray-700">
-                            Category
-                            <input value={post.category} onChange={(e) => updateBlogDraftPost(index, "category", e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-500" />
-                          </label>
-                          <label className="block text-sm font-semibold text-gray-700">
-                            Date
-                            <input value={post.date} onChange={(e) => updateBlogDraftPost(index, "date", e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-500" />
-                          </label>
-                          <label className="block text-sm font-semibold text-gray-700">
-                            Read Time
-                            <input value={post.readTime} onChange={(e) => updateBlogDraftPost(index, "readTime", e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-500" />
-                          </label>
-                          <label className="block text-sm font-semibold text-gray-700 md:col-span-2">
-                            Excerpt
-                            <textarea value={post.excerpt} onChange={(e) => updateBlogDraftPost(index, "excerpt", e.target.value)} rows={3} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-500" />
-                          </label>
-                          <label className="block text-sm font-semibold text-gray-700 md:col-span-2">
-                            Image URL
-                            <input value={post.image} onChange={(e) => updateBlogDraftPost(index, "image", e.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-green-500" />
-                          </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ─ Blog Post Modal Form ─ */}
+                  {blogPostModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+                      <div className="relative w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl border border-gray-100 max-h-[90vh] flex flex-col">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
+                          <div>
+                            <h3 className="font-display text-xl font-bold text-gray-900">
+                              {editingBlogPostIndex !== null ? "Edit Blog Post" : "Create New Blog Post"}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5">Fill in the details below. Images upload directly to Cloudinary.</p>
+                          </div>
+                          <button
+                            onClick={() => setBlogPostModalOpen(false)}
+                            className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Post Title *</label>
+                            <input
+                              type="text"
+                              value={blogPostFormData.title}
+                              onChange={(e) => setBlogPostFormData(prev => ({ ...prev, title: e.target.value }))}
+                              placeholder="e.g. 7 Natural Herbs That Support Heart Health"
+                              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 placeholder:text-gray-400"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Category *</label>
+                              <input
+                                type="text"
+                                value={blogPostFormData.category}
+                                onChange={(e) => setBlogPostFormData(prev => ({ ...prev, category: e.target.value }))}
+                                placeholder="Wellness, Diabetes, etc."
+                                className="w-full rounded-xl border border-gray-200 px-3.5 py-2 text-sm text-gray-900 outline-none focus:border-green-600"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Date Label</label>
+                              <input
+                                type="text"
+                                value={blogPostFormData.date}
+                                onChange={(e) => setBlogPostFormData(prev => ({ ...prev, date: e.target.value }))}
+                                placeholder="28 June 2025"
+                                className="w-full rounded-xl border border-gray-200 px-3.5 py-2 text-sm text-gray-900 outline-none focus:border-green-600"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Read Time</label>
+                              <input
+                                type="text"
+                                value={blogPostFormData.readTime}
+                                onChange={(e) => setBlogPostFormData(prev => ({ ...prev, readTime: e.target.value }))}
+                                placeholder="5 min"
+                                className="w-full rounded-xl border border-gray-200 px-3.5 py-2 text-sm text-gray-900 outline-none focus:border-green-600"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Excerpt / Summary *</label>
+                            <textarea
+                              rows={3}
+                              value={blogPostFormData.excerpt}
+                              onChange={(e) => setBlogPostFormData(prev => ({ ...prev, excerpt: e.target.value }))}
+                              placeholder="Short synopsis shown on the home page carousel card..."
+                              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 placeholder:text-gray-400"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Full Article Content (Optional)</label>
+                            <textarea
+                              rows={4}
+                              value={blogPostFormData.content || ""}
+                              onChange={(e) => setBlogPostFormData(prev => ({ ...prev, content: e.target.value }))}
+                              placeholder="Full text of the blog post for readers..."
+                              className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-green-600 placeholder:text-gray-400"
+                            />
+                          </div>
+
+                          {/* Image & Cloudinary Media Upload Widget */}
+                          <div className="space-y-2 rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">Cover Media & Image</label>
+                            <div className="grid sm:grid-cols-[120px_1fr] gap-4 items-center">
+                              {/* Preview */}
+                              <div className="relative h-24 w-full sm:w-[120px] rounded-xl overflow-hidden border border-gray-200 bg-white flex items-center justify-center flex-shrink-0 shadow-inner">
+                                {blogPostFormData.image ? (
+                                  <img
+                                    src={blogPostFormData.image}
+                                    alt="Preview"
+                                    className="h-full w-full object-cover"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = news6; }}
+                                  />
+                                ) : (
+                                  <ImageIcon className="w-8 h-8 text-gray-300" />
+                                )}
+                              </div>
+
+                              {/* Upload Controls */}
+                              <div className="space-y-2 flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <label
+                                    className={`cursor-pointer inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all shadow-sm ${
+                                      modalImageUploading
+                                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                        : "bg-green-700 text-white hover:bg-green-800"
+                                    }`}
+                                  >
+                                    {modalImageUploading ? (
+                                      <>
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        Uploading...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Upload className="w-3.5 h-3.5" />
+                                        Upload Image
+                                      </>
+                                    )}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      disabled={modalImageUploading}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleModalImageUpload(file);
+                                        e.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                  <span className="text-xs text-gray-400 font-medium">PNG, JPG, WebP up to 10MB</span>
+                                </div>
+
+                                <input
+                                  type="text"
+                                  value={blogPostFormData.image}
+                                  onChange={(e) => setBlogPostFormData(prev => ({ ...prev, image: e.target.value }))}
+                                  placeholder="Image URL or upload file"
+                                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 outline-none focus:border-green-600 placeholder:text-gray-400"
+                                />
+                              </div>
+                            </div>
+
+                            {modalImageSuccess && (
+                              <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" /> {modalImageSuccess}
+                              </p>
+                            )}
+                            {modalImageError && (
+                              <p className="text-xs font-semibold text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5" /> {modalImageError}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setBlogPostModalOpen(false)}
+                            className="rounded-full border border-gray-200 px-5 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveBlogPostModal}
+                            className="rounded-full px-6 py-2 text-sm font-bold text-white shadow-md hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                            style={{ background: G }}
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            {editingBlogPostIndex !== null ? "Save Changes" : "Save & Publish Post"}
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -5529,9 +6672,26 @@ export default function App() {
               {bookingSmsStatus ? (
                 <p className="mb-4 text-sm font-semibold text-green-700">{bookingSmsStatus}</p>
               ) : null}
-              <button onClick={() => setBookingDone(false)} className="text-white px-6 py-3 rounded-full font-bold hover:opacity-90 transition-opacity" style={{ background:G }}>
-                Back to Booking
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {patientAuthenticated && (
+                  <button
+                    type="button"
+                    onClick={() => { setBookingDone(false); setView("patient"); setPatientTab("appointments"); }}
+                    className="text-white px-6 py-3 rounded-full font-bold hover:opacity-90 transition-opacity shadow-md flex items-center gap-1.5"
+                    style={{ background: G }}
+                  >
+                    View in Patient Portal
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setBookingDone(false)}
+                  className={`px-6 py-3 rounded-full font-bold transition-all ${patientAuthenticated ? "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50" : "text-white hover:opacity-90"}`}
+                  style={!patientAuthenticated ? { background: G } : {}}
+                >
+                  Back to Booking
+                </button>
+              </div>
             </div>
           ) : (
             <div className={`rounded-3xl border shadow-xl p-4 sm:p-8 ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"}`}>
@@ -6120,7 +7280,34 @@ export default function App() {
               <ul className="space-y-2 text-sm">
                 {col.links.map(l => (
                   <li key={l}>
-                    <button className="text-left transition-colors hover:text-white" style={{ color:"inherit" }}>{l}</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (l === "Patient Portal") {
+                          setView("patient");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        } else if (l === "Book Appointment") {
+                          const el = document.getElementById("book");
+                          el?.scrollIntoView({ behavior: "smooth" });
+                        } else if (l === "Order Products" || l === "Prescriptions") {
+                          const el = document.getElementById("products");
+                          el?.scrollIntoView({ behavior: "smooth" });
+                        } else if (l === "Services") {
+                          const el = document.getElementById("services");
+                          el?.scrollIntoView({ behavior: "smooth" });
+                        } else if (l === "Blog") {
+                          const el = document.getElementById("blog");
+                          el?.scrollIntoView({ behavior: "smooth" });
+                        } else if (l === "FAQ") {
+                          const el = document.getElementById("faq");
+                          el?.scrollIntoView({ behavior: "smooth" });
+                        }
+                      }}
+                      className="text-left transition-colors hover:text-white"
+                      style={{ color:"inherit" }}
+                    >
+                      {l}
+                    </button>
                   </li>
                 ))}
               </ul>
